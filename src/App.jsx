@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Settings, Info, Calendar, DollarSign, TrendingUp, Users, Plus, Trash2, Home, Baby, Coffee, Car, HeartPulse, Smile, Briefcase, Umbrella, Wallet, Shield, Download, Save, Upload, Target, Activity, ChevronRight, ChevronDown, Menu, X } from 'lucide-react';
+import { Settings, Info, Calendar, DollarSign, TrendingUp, Users, Plus, Trash2, Home, Baby, Coffee, Car, HeartPulse, Smile, Briefcase, Umbrella, Wallet, Shield, Download, Save, Upload, Target, Activity, ChevronRight, ChevronDown, Menu, X, RotateCcw, AlertTriangle } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -26,9 +26,9 @@ const InputGroup = ({ label, children, icon: Icon, description }) => (
 );
 
 // Currency Input Component for Assumptions UI
-const CurrencyInput = ({ value, onChange, className }) => {
+const CurrencyInput = ({ value, onChange, className, placeholder }) => {
   const formatStr = (val) => {
-    if (val === undefined || val === null) return '';
+    if (val === undefined || val === null || val === '' || val === 0) return '';
     const isNeg = val < 0;
     const numStr = Math.abs(val).toLocaleString('en-US');
     return isNeg ? `-$${numStr}` : `$${numStr}`;
@@ -46,6 +46,10 @@ const CurrencyInput = ({ value, onChange, className }) => {
   const handleChange = (e) => {
     const raw = e.target.value;
     setLocalVal(raw);
+    if (raw === '') {
+      onChange('');
+      return;
+    }
     const parsed = raw.replace(/[^0-9.-]+/g, '');
     if (parsed !== '' && parsed !== '-') {
       const num = Number(parsed);
@@ -54,11 +58,15 @@ const CurrencyInput = ({ value, onChange, className }) => {
   };
 
   const handleBlur = () => {
+    if (localVal === '') {
+      onChange('');
+      return;
+    }
     const parsed = localVal.replace(/[^0-9.-]+/g, '');
-    let num = 0;
+    let num = '';
     if (parsed !== '' && parsed !== '-') {
       num = Number(parsed);
-      if (isNaN(num)) num = 0;
+      if (isNaN(num)) num = '';
     }
     setLocalVal(formatStr(num));
     onChange(num);
@@ -72,9 +80,22 @@ const CurrencyInput = ({ value, onChange, className }) => {
       value={localVal}
       onChange={handleChange}
       onBlur={handleBlur}
+      placeholder={placeholder || "$0"}
     />
   );
 };
+
+// Standard Number Input ensuring blank states pass safely
+const NumberInput = ({ value, onChange, className, placeholder, step }) => (
+  <input
+    type="number"
+    className={className}
+    placeholder={placeholder || "0"}
+    step={step}
+    value={value}
+    onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+  />
+);
 
 // Helper component for the Expanded Math Breakdown Row
 const MathRow = ({ label, val, isNeg, isPos }) => {
@@ -99,6 +120,7 @@ export default function RetirementApp() {
   const [advancedMode, setAdvancedMode] = useState(false);
   const [expandedRow, setExpandedRow] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
   const [startYear, setStartYear] = useState(currentYear);
   const [startMonth, setStartMonth] = useState(0); 
@@ -170,10 +192,10 @@ export default function RetirementApp() {
   });
 
   const handleExpenseChange = (key, value) => {
-    setExpenses(prev => ({ ...prev, [key]: Number(value) }));
+    setExpenses(prev => ({ ...prev, [key]: value }));
   };
 
-  const totalBaseAnnualExpenses = Object.values(expenses).reduce((a, b) => a + b, 0);
+  const totalBaseAnnualExpenses = Object.values(expenses).reduce((a, b) => a + (Number(b) || 0), 0);
 
   // --- EXPENSE ADJUSTMENTS ---
   const [adjustments, setAdjustments] = useState([
@@ -191,6 +213,31 @@ export default function RetirementApp() {
 
   const removeAdjustment = (id) => {
     setAdjustments(adjustments.filter(adj => adj.id !== id));
+  };
+
+  // --- CLEAR DATA LOGIC ---
+  const handleClearData = () => {
+    setStartYear(''); setTargetEndAge('');
+    
+    setP1BirthYear(''); setP1RetirementAge(''); setP1SsStartAge(''); setP1MaxSs('');
+    setP2BirthYear(''); setP2RetirementAge(''); setP2SsStartAge(''); setP2MaxSs('');
+    
+    setBalanceTrad(''); setBalanceRoth(''); setBalanceCash(''); setHomeEquity('');
+    setAnnualMortgagePrincipal(''); setMortgagePayoffYear('');
+    
+    setContribTrad(''); setContribRoth(''); setContribCash('');
+    setAnnualReturn(''); setCashReturn(''); 
+    setTargetBufferYears(''); setBufferBuildYears(''); 
+    setTransitionDrop(''); setStateTaxRate('');
+    setCrashAge(''); setCrashPercent('');
+    
+    setExpenses({ housing: '', family: '', food: '', transport: '', health: '', lifestyle: '' });
+    setAdjustments([]);
+
+    // Selectors cleanly fallback to defaults instead of blank breaking them
+    setStartMonth(0); setNumAdults(2); setSwrRate(4.0); setEnableCrash(false);
+    
+    setIsClearModalOpen(false);
   };
 
   // --- SETTINGS IMPORT & EXPORT ---
@@ -219,6 +266,8 @@ export default function RetirementApp() {
     const file = event.target.files[0];
     if (!file) return;
 
+    const loadVal = (val) => val === '' || val === null || val === undefined ? '' : Number(val);
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -227,43 +276,46 @@ export default function RetirementApp() {
         if (settings.advancedMode !== undefined) setAdvancedMode(settings.advancedMode);
         if (settings.calcMode !== undefined) setCalcMode(settings.calcMode);
         if (settings.swrRate !== undefined) setSwrRate(Number(settings.swrRate));
-        if (settings.targetEndAge !== undefined) setTargetEndAge(Number(settings.targetEndAge));
-        if (settings.startYear !== undefined) setStartYear(Number(settings.startYear));
+        if (settings.targetEndAge !== undefined) setTargetEndAge(loadVal(settings.targetEndAge));
+        if (settings.startYear !== undefined) setStartYear(loadVal(settings.startYear));
         if (settings.startMonth !== undefined) setStartMonth(Number(settings.startMonth));
         if (settings.numAdults !== undefined) setNumAdults(Number(settings.numAdults));
         
-        if (settings.p1BirthYear !== undefined) setP1BirthYear(Number(settings.p1BirthYear));
+        // Profiles
+        if (settings.p1BirthYear !== undefined) setP1BirthYear(loadVal(settings.p1BirthYear));
         if (settings.p1BirthMonth !== undefined) setP1BirthMonth(Number(settings.p1BirthMonth));
-        if (settings.p1RetirementAge !== undefined) setP1RetirementAge(Number(settings.p1RetirementAge));
-        if (settings.p1SsStartAge !== undefined) setP1SsStartAge(Number(settings.p1SsStartAge));
-        if (settings.p1MaxSs !== undefined) setP1MaxSs(Number(settings.p1MaxSs));
+        if (settings.p1RetirementAge !== undefined) setP1RetirementAge(loadVal(settings.p1RetirementAge));
+        if (settings.p1SsStartAge !== undefined) setP1SsStartAge(loadVal(settings.p1SsStartAge));
+        if (settings.p1MaxSs !== undefined) setP1MaxSs(loadVal(settings.p1MaxSs));
 
-        if (settings.p2BirthYear !== undefined) setP2BirthYear(Number(settings.p2BirthYear));
+        if (settings.p2BirthYear !== undefined) setP2BirthYear(loadVal(settings.p2BirthYear));
         if (settings.p2BirthMonth !== undefined) setP2BirthMonth(Number(settings.p2BirthMonth));
-        if (settings.p2RetirementAge !== undefined) setP2RetirementAge(Number(settings.p2RetirementAge));
-        if (settings.p2SsStartAge !== undefined) setP2SsStartAge(Number(settings.p2SsStartAge));
-        if (settings.p2MaxSs !== undefined) setP2MaxSs(Number(settings.p2MaxSs));
+        if (settings.p2RetirementAge !== undefined) setP2RetirementAge(loadVal(settings.p2RetirementAge));
+        if (settings.p2SsStartAge !== undefined) setP2SsStartAge(loadVal(settings.p2SsStartAge));
+        if (settings.p2MaxSs !== undefined) setP2MaxSs(loadVal(settings.p2MaxSs));
 
-        if (settings.balanceTrad !== undefined) setBalanceTrad(Number(settings.balanceTrad));
-        if (settings.balanceRoth !== undefined) setBalanceRoth(Number(settings.balanceRoth));
-        if (settings.balanceCash !== undefined) setBalanceCash(Number(settings.balanceCash));
-        if (settings.homeEquity !== undefined) setHomeEquity(Number(settings.homeEquity));
-        if (settings.annualMortgagePrincipal !== undefined) setAnnualMortgagePrincipal(Number(settings.annualMortgagePrincipal));
-        if (settings.mortgagePayoffYear !== undefined) setMortgagePayoffYear(Number(settings.mortgagePayoffYear));
+        // Balances
+        if (settings.balanceTrad !== undefined) setBalanceTrad(loadVal(settings.balanceTrad));
+        if (settings.balanceRoth !== undefined) setBalanceRoth(loadVal(settings.balanceRoth));
+        if (settings.balanceCash !== undefined) setBalanceCash(loadVal(settings.balanceCash));
+        if (settings.homeEquity !== undefined) setHomeEquity(loadVal(settings.homeEquity));
+        if (settings.annualMortgagePrincipal !== undefined) setAnnualMortgagePrincipal(loadVal(settings.annualMortgagePrincipal));
+        if (settings.mortgagePayoffYear !== undefined) setMortgagePayoffYear(loadVal(settings.mortgagePayoffYear));
         
-        if (settings.contribTrad !== undefined) setContribTrad(Number(settings.contribTrad));
-        if (settings.contribRoth !== undefined) setContribRoth(Number(settings.contribRoth));
-        if (settings.contribCash !== undefined) setContribCash(Number(settings.contribCash));
-        if (settings.annualReturn !== undefined) setAnnualReturn(Number(settings.annualReturn));
-        if (settings.cashReturn !== undefined) setCashReturn(Number(settings.cashReturn));
-        if (settings.targetBufferYears !== undefined) setTargetBufferYears(Number(settings.targetBufferYears));
-        if (settings.bufferBuildYears !== undefined) setBufferBuildYears(Number(settings.bufferBuildYears));
-        if (settings.transitionDrop !== undefined) setTransitionDrop(Number(settings.transitionDrop));
-        if (settings.stateTaxRate !== undefined) setStateTaxRate(Number(settings.stateTaxRate));
+        // Contributions & Rates
+        if (settings.contribTrad !== undefined) setContribTrad(loadVal(settings.contribTrad));
+        if (settings.contribRoth !== undefined) setContribRoth(loadVal(settings.contribRoth));
+        if (settings.contribCash !== undefined) setContribCash(loadVal(settings.contribCash));
+        if (settings.annualReturn !== undefined) setAnnualReturn(loadVal(settings.annualReturn));
+        if (settings.cashReturn !== undefined) setCashReturn(loadVal(settings.cashReturn));
+        if (settings.targetBufferYears !== undefined) setTargetBufferYears(loadVal(settings.targetBufferYears));
+        if (settings.bufferBuildYears !== undefined) setBufferBuildYears(loadVal(settings.bufferBuildYears));
+        if (settings.transitionDrop !== undefined) setTransitionDrop(loadVal(settings.transitionDrop));
+        if (settings.stateTaxRate !== undefined) setStateTaxRate(loadVal(settings.stateTaxRate));
         
         if (settings.enableCrash !== undefined) setEnableCrash(settings.enableCrash);
-        if (settings.crashAge !== undefined) setCrashAge(Number(settings.crashAge));
-        if (settings.crashPercent !== undefined) setCrashPercent(Number(settings.crashPercent));
+        if (settings.crashAge !== undefined) setCrashAge(loadVal(settings.crashAge));
+        if (settings.crashPercent !== undefined) setCrashPercent(loadVal(settings.crashPercent));
 
         if (settings.expenses !== undefined) setExpenses(settings.expenses);
         if (settings.adjustments !== undefined) setAdjustments(settings.adjustments);
@@ -275,24 +327,79 @@ export default function RetirementApp() {
     event.target.value = ''; 
   };
 
+  // --- ENGINE SAFE VARIABLES ---
+  // Transforms empty inputs into mathematically safe defaults so the projection never crashes
+  const getSafeValues = () => {
+    const n_startYear = startYear === '' ? currentYear : Number(startYear);
+    const n_startMonth = startMonth === '' ? 0 : Number(startMonth);
+    const n_targetEndAge = targetEndAge === '' ? 100 : Number(targetEndAge);
+    
+    const n_p1BirthYear = p1BirthYear === '' ? n_startYear - 30 : Number(p1BirthYear);
+    const n_p1BirthMonth = p1BirthMonth === '' ? 0 : Number(p1BirthMonth);
+    const n_p1RetirementAge = p1RetirementAge === '' ? 65 : Number(p1RetirementAge);
+    const n_p1SsStartAge = p1SsStartAge === '' ? 67 : Number(p1SsStartAge);
+    const n_p1MaxSs = Number(p1MaxSs) || 0;
+
+    const n_p2BirthYear = p2BirthYear === '' ? n_startYear - 30 : Number(p2BirthYear);
+    const n_p2BirthMonth = p2BirthMonth === '' ? 0 : Number(p2BirthMonth);
+    const n_p2RetirementAge = p2RetirementAge === '' ? 65 : Number(p2RetirementAge);
+    const n_p2SsStartAge = p2SsStartAge === '' ? 67 : Number(p2SsStartAge);
+    const n_p2MaxSs = Number(p2MaxSs) || 0;
+
+    const n_balanceTrad = Number(balanceTrad) || 0;
+    const n_balanceRoth = Number(balanceRoth) || 0;
+    const n_balanceCash = Number(balanceCash) || 0;
+    const n_homeEquity = Number(homeEquity) || 0;
+    const n_annualMortgagePrincipal = Number(annualMortgagePrincipal) || 0;
+    const n_mortgagePayoffYear = mortgagePayoffYear === '' ? n_startYear + 30 : Number(mortgagePayoffYear);
+
+    const n_contribTrad = Number(contribTrad) || 0;
+    const n_contribRoth = Number(contribRoth) || 0;
+    const n_contribCash = Number(contribCash) || 0;
+
+    const n_annualReturn = Number(annualReturn) || 0;
+    const n_cashReturn = Number(cashReturn) || 0;
+    const n_targetBufferYears = Number(targetBufferYears) || 0;
+    const n_bufferBuildYears = Number(bufferBuildYears) || 0;
+    const n_transitionDrop = Number(transitionDrop) || 0;
+    const n_stateTaxRate = Number(stateTaxRate) || 0;
+
+    const n_crashAge = crashAge === '' ? 55 : Number(crashAge);
+    const n_crashPercent = Number(crashPercent) || 0;
+    const n_swrRate = swrRate === '' ? 4.0 : Number(swrRate);
+    
+    return {
+       n_startYear, n_startMonth, n_targetEndAge,
+       n_p1BirthYear, n_p1BirthMonth, n_p1RetirementAge, n_p1SsStartAge, n_p1MaxSs,
+       n_p2BirthYear, n_p2BirthMonth, n_p2RetirementAge, n_p2SsStartAge, n_p2MaxSs,
+       n_balanceTrad, n_balanceRoth, n_balanceCash, n_homeEquity,
+       n_annualMortgagePrincipal, n_mortgagePayoffYear,
+       n_contribTrad, n_contribRoth, n_contribCash,
+       n_annualReturn, n_cashReturn, n_targetBufferYears, n_bufferBuildYears,
+       n_transitionDrop, n_stateTaxRate,
+       n_crashAge, n_crashPercent, n_swrRate
+    };
+  }
+
   // --- SWR CALCULATION ENGINE ---
   const calculatedAgeBySWR = useMemo(() => {
-    if (calcMode !== 'swr') return p1RetirementAge;
+    const vals = getSafeValues();
+    if (calcMode !== 'swr') return vals.n_p1RetirementAge;
 
-    let curTrad = balanceTrad;
-    let curRoth = balanceRoth;
-    let curCash = balanceCash;
-    let curHome = homeEquity;
+    let curTrad = vals.n_balanceTrad;
+    let curRoth = vals.n_balanceRoth;
+    let curCash = vals.n_balanceCash;
+    let curHome = vals.n_homeEquity;
     
-    let currentDate = new Date(startYear, startMonth); 
-    const p1BirthDateObj = new Date(p1BirthYear, p1BirthMonth);
-    const monthlyReturnRate = Math.pow(1 + annualReturn / 100, 1 / 12) - 1;
-    const monthlyCashReturnRate = Math.pow(1 + cashReturn / 100, 1 / 12) - 1;
+    let currentDate = new Date(vals.n_startYear, vals.n_startMonth); 
+    const p1BirthDateObj = new Date(vals.n_p1BirthYear, vals.n_p1BirthMonth);
+    const monthlyReturnRate = Math.pow(1 + vals.n_annualReturn / 100, 1 / 12) - 1;
+    const monthlyCashReturnRate = Math.pow(1 + vals.n_cashReturn / 100, 1 / 12) - 1;
     const monthlyHomeReturnRate = Math.pow(1 + 1 / 100, 1 / 12) - 1;
-    const stateRate = stateTaxRate / 100;
+    const stateRate = vals.n_stateTaxRate / 100;
 
-    const startAgeInMonthsSWR = (startYear - p1BirthYear) * 12 + (startMonth - p1BirthMonth);
-    const totalMonthsToRunSWR = Math.max(12, (targetEndAge * 12) - startAgeInMonthsSWR);
+    const startAgeInMonthsSWR = (vals.n_startYear - vals.n_p1BirthYear) * 12 + (vals.n_startMonth - vals.n_p1BirthMonth);
+    const totalMonthsToRunSWR = Math.max(12, (vals.n_targetEndAge * 12) - startAgeInMonthsSWR);
 
     for (let i = 0; i < totalMonthsToRunSWR; i++) { 
       const year = currentDate.getFullYear();
@@ -303,64 +410,64 @@ export default function RetirementApp() {
 
       let currentAnnualExpenses = totalBaseAnnualExpenses;
       adjustments.forEach(adj => {
-        if (adj.type === 'year' && year >= adj.trigger) {
-          currentAnnualExpenses += adj.amount;
-        } else if (adj.type === 'age' && p1AgeYears >= adj.trigger) {
-          currentAnnualExpenses += adj.amount;
-        }
+        const trigger = Number(adj.trigger) || 0;
+        const amount = Number(adj.amount) || 0;
+        if (adj.type === 'year' && year >= trigger) currentAnnualExpenses += amount;
+        else if (adj.type === 'age' && p1AgeYears >= trigger) currentAnnualExpenses += amount;
       });
 
-      // Factor in rough state tax bump to required SWR target
       let grossExpenses = currentAnnualExpenses * (1 + stateRate);
-      const targetAssets = grossExpenses / (swrRate / 100);
+      const targetAssets = grossExpenses / (vals.n_swrRate / 100);
       const investableAssets = curTrad + curRoth + curCash;
 
-      if (investableAssets >= targetAssets) {
+      if (investableAssets >= targetAssets && targetAssets > 0) {
         return p1AgeYears; 
       }
 
-      let moMortgagePrincipal = year <= mortgagePayoffYear ? (annualMortgagePrincipal / 12) : 0;
+      let moMortgagePrincipal = year <= vals.n_mortgagePayoffYear ? (vals.n_annualMortgagePrincipal / 12) : 0;
       
-      curTrad += (curTrad > 0 ? curTrad * monthlyReturnRate : 0) + contribTrad / 12;
-      curRoth += (curRoth > 0 ? curRoth * monthlyReturnRate : 0) + contribRoth / 12;
-      curCash += (curCash > 0 ? curCash * monthlyCashReturnRate : 0) + contribCash / 12;
+      curTrad += (curTrad > 0 ? curTrad * monthlyReturnRate : 0) + vals.n_contribTrad / 12;
+      curRoth += (curRoth > 0 ? curRoth * monthlyReturnRate : 0) + vals.n_contribRoth / 12;
+      curCash += (curCash > 0 ? curCash * monthlyCashReturnRate : 0) + vals.n_contribCash / 12;
       curHome += (curHome > 0 ? curHome * monthlyHomeReturnRate : 0) + moMortgagePrincipal;
 
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
-    return targetEndAge; 
+    return vals.n_targetEndAge; 
   }, [calcMode, swrRate, startYear, startMonth, p1BirthYear, p1BirthMonth, targetEndAge, p1RetirementAge, balanceTrad, balanceRoth, balanceCash, homeEquity, annualMortgagePrincipal, mortgagePayoffYear, contribTrad, contribRoth, contribCash, annualReturn, cashReturn, stateTaxRate, totalBaseAnnualExpenses, adjustments]);
 
-  const activeP1RetAge = calcMode === 'swr' ? calculatedAgeBySWR : p1RetirementAge;
+  const activeP1RetAge = calcMode === 'swr' ? calculatedAgeBySWR : (p1RetirementAge === '' ? 65 : Number(p1RetirementAge));
 
   // --- CORE PROJECTION SPREADSHEET ENGINE ---
   const calculateProjection = (testP1RetAge) => {
-    let curTrad = balanceTrad;
-    let curRoth = balanceRoth;
-    let curCash = balanceCash;
-    let curHome = homeEquity;
+    const vals = getSafeValues();
+
+    let curTrad = vals.n_balanceTrad;
+    let curRoth = vals.n_balanceRoth;
+    let curCash = vals.n_balanceCash;
+    let curHome = vals.n_homeEquity;
     
     const records = [];
-    let currentDate = new Date(startYear, startMonth); 
+    let currentDate = new Date(vals.n_startYear, vals.n_startMonth); 
     
-    const p1BirthDateObj = new Date(p1BirthYear, p1BirthMonth);
-    const p2BirthDateObj = advancedMode ? new Date(p2BirthYear, p2BirthMonth) : new Date(p1BirthYear, p1BirthMonth);
-    const activeP2RetAge = advancedMode ? p2RetirementAge : testP1RetAge;
-    const activeP2SsStartAge = advancedMode ? p2SsStartAge : p1SsStartAge;
-    const activeP2MaxSs = advancedMode ? p2MaxSs : p1MaxSs;
+    const p1BirthDateObj = new Date(vals.n_p1BirthYear, vals.n_p1BirthMonth);
+    const p2BirthDateObj = advancedMode ? new Date(vals.n_p2BirthYear, vals.n_p2BirthMonth) : new Date(vals.n_p1BirthYear, vals.n_p1BirthMonth);
+    const activeP2RetAge = advancedMode ? vals.n_p2RetirementAge : testP1RetAge;
+    const activeP2SsStartAge = advancedMode ? vals.n_p2SsStartAge : vals.n_p1SsStartAge;
+    const activeP2MaxSs = advancedMode ? vals.n_p2MaxSs : vals.n_p1MaxSs;
     const isMFJ = numAdults === 2;
-    const stateRate = stateTaxRate / 100;
+    const stateRate = vals.n_stateTaxRate / 100;
     
-    const monthlyReturnRate = Math.pow(1 + annualReturn / 100, 1 / 12) - 1;
-    const monthlyCashReturnRate = Math.pow(1 + cashReturn / 100, 1 / 12) - 1;
+    const monthlyReturnRate = Math.pow(1 + vals.n_annualReturn / 100, 1 / 12) - 1;
+    const monthlyCashReturnRate = Math.pow(1 + vals.n_cashReturn / 100, 1 / 12) - 1;
     const monthlyHomeReturnRate = Math.pow(1 + 1 / 100, 1 / 12) - 1; 
 
-    const startAgeInMonths = (startYear - p1BirthYear) * 12 + (startMonth - p1BirthMonth);
-    const totalMonthsToRun = Math.max(12, (targetEndAge * 12) - startAgeInMonths);
+    const startAgeInMonths = (vals.n_startYear - vals.n_p1BirthYear) * 12 + (vals.n_startMonth - vals.n_p1BirthMonth);
+    const totalMonthsToRun = Math.max(12, (vals.n_targetEndAge * 12) - startAgeInMonths);
 
     let hasCrashed = false;
 
-    // --- TAX OPTIMIZATION HELPER (Fed + State combined) ---
+    // --- TAX OPTIMIZATION HELPER ---
     const drawFromTrad = (netNeeded, currentIncome, maxRateAllowed) => {
         let remainingNet = netNeeded;
         let grossPulled = 0;
@@ -380,9 +487,8 @@ export default function RetirementApp() {
             let maxGrossInBracket = b.top - income;
             maxGrossInBracket = Math.min(maxGrossInBracket, curTrad);
             
-            // Combine Federal Rate and explicitly requested State Rate
             let combinedRate = b.r + stateRate;
-            if (combinedRate >= 1) combinedRate = 0.99; // Prevent dividing by zero
+            if (combinedRate >= 1) combinedRate = 0.99; 
             
             let netInBracket = maxGrossInBracket * (1 - combinedRate);
             let netToTake = Math.min(remainingNet, netInBracket);
@@ -430,7 +536,6 @@ export default function RetirementApp() {
         if (calcMode === 'swr') {
           isP2Retired = isP1Retired;
         } else {
-          const activeP2RetAge = advancedMode ? p2RetirementAge : testP1RetAge;
           isP2Retired = p2AgeYears > activeP2RetAge || (p2AgeYears === activeP2RetAge && p2AgeMonths >= 0);
         }
       }
@@ -441,7 +546,7 @@ export default function RetirementApp() {
       if (numAdults === 2) {
         if (isP1Retired && isP2Retired) { workingRatio = 0; contribRatio = 0; }
         else if (!isP1Retired && !isP2Retired) { workingRatio = 1; contribRatio = 1; }
-        else { workingRatio = 0.5; contribRatio = advancedMode ? (1 - (transitionDrop / 100)) : 0.5; }
+        else { workingRatio = 0.5; contribRatio = advancedMode ? (1 - (vals.n_transitionDrop / 100)) : 0.5; }
       } else {
         workingRatio = !isP1Retired ? 1 : 0;
         contribRatio = !isP1Retired ? 1 : 0;
@@ -451,20 +556,21 @@ export default function RetirementApp() {
 
       let currentAnnualExpenses = totalBaseAnnualExpenses;
       adjustments.forEach(adj => {
-        if (adj.type === 'year' && year >= adj.trigger) currentAnnualExpenses += adj.amount;
-        else if (adj.type === 'age' && p1AgeYears >= adj.trigger) currentAnnualExpenses += adj.amount;
+        const trigger = Number(adj.trigger) || 0;
+        const amount = Number(adj.amount) || 0;
+        if (adj.type === 'year' && year >= trigger) currentAnnualExpenses += amount;
+        else if (adj.type === 'age' && p1AgeYears >= trigger) currentAnnualExpenses += amount;
       });
 
       let isFlexed = false;
       if (hasCrashed && workingRatio === 0) {
-        if (swrRate === 5.2) { currentAnnualExpenses *= 0.90; isFlexed = true; } 
-        else if (swrRate === 4.5) { currentAnnualExpenses *= 0.95; isFlexed = true; }
+        if (vals.n_swrRate === 5.2) { currentAnnualExpenses *= 0.90; isFlexed = true; } 
+        else if (vals.n_swrRate === 4.5) { currentAnnualExpenses *= 0.95; isFlexed = true; }
       }
       const currentMonthlyExpense = currentAnnualExpenses / 12;
 
-      // Social Security Tax Logic
       let ssIncome = 0;
-      if (p1AgeYears > p1SsStartAge || (p1AgeYears === p1SsStartAge && p1AgeMonths >= 0)) ssIncome += p1MaxSs;
+      if (p1AgeYears > vals.n_p1SsStartAge || (p1AgeYears === vals.n_p1SsStartAge && p1AgeMonths >= 0)) ssIncome += vals.n_p1MaxSs;
       if (numAdults === 2 && (p2AgeYears > activeP2SsStartAge || (p2AgeYears === activeP2SsStartAge && p2AgeMonths >= 0))) ssIncome += activeP2MaxSs;
 
       let taxableSS = ssIncome * 0.85;
@@ -491,9 +597,9 @@ export default function RetirementApp() {
 
       const startTotal = curTrad + curRoth + curCash + curHome;
 
-      if (enableCrash && p1AgeYears === crashAge && p1AgeMonths === 0) {
-        curTrad *= (1 - crashPercent / 100);
-        curRoth *= (1 - crashPercent / 100);
+      if (enableCrash && p1AgeYears === vals.n_crashAge && p1AgeMonths === 0) {
+        curTrad *= (1 - vals.n_crashPercent / 100);
+        curRoth *= (1 - vals.n_crashPercent / 100);
         hasCrashed = true;
       }
 
@@ -502,7 +608,6 @@ export default function RetirementApp() {
           if (calcMode === 'swr') {
              monthsUntilRet = isP1Retired ? 0 : (testP1RetAge * 12) - p1AgeMonthsTotal;
           } else {
-             const activeP2RetAge = advancedMode ? p2RetirementAge : testP1RetAge;
              if (!isP1Retired && !isP2Retired) monthsUntilRet = Math.min((testP1RetAge * 12) - p1AgeMonthsTotal, (activeP2RetAge * 12) - p2AgeMonthsTotal);
              else if (!isP1Retired) monthsUntilRet = (testP1RetAge * 12) - p1AgeMonthsTotal;
              else if (!isP2Retired) monthsUntilRet = (activeP2RetAge * 12) - p2AgeMonthsTotal;
@@ -511,13 +616,13 @@ export default function RetirementApp() {
           monthsUntilRet = (testP1RetAge * 12) - p1AgeMonthsTotal;
       }
 
-      let moTrad = (contribTrad / 12) * contribRatio;
-      let moRoth = (contribRoth / 12) * contribRatio;
-      let moCash = (contribCash / 12) * contribRatio;
+      let moTrad = (vals.n_contribTrad / 12) * contribRatio;
+      let moRoth = (vals.n_contribRoth / 12) * contribRatio;
+      let moCash = (vals.n_contribCash / 12) * contribRatio;
 
-      if (targetBufferYears > 0 && monthsUntilRet > 0) {
-        const buildWindowMonths = advancedMode ? (bufferBuildYears * 12) : 9999; 
-        const targetCash = currentAnnualExpenses * targetBufferYears;
+      if (vals.n_targetBufferYears > 0 && monthsUntilRet > 0) {
+        const buildWindowMonths = advancedMode ? (vals.n_bufferBuildYears * 12) : 9999; 
+        const targetCash = currentAnnualExpenses * vals.n_targetBufferYears;
         const cashNeeded = Math.max(0, targetCash - curCash);
         
         if (cashNeeded > 0 && moRoth > 0 && monthsUntilRet <= buildWindowMonths) {
@@ -533,7 +638,7 @@ export default function RetirementApp() {
       const homeGrowth = curHome > 0 ? curHome * monthlyHomeReturnRate : 0;
       const totalGrowth = tradGrowth + rothGrowth + cashGrowth + homeGrowth;
       
-      let moMortgagePrincipal = year <= mortgagePayoffYear ? (annualMortgagePrincipal / 12) : 0;
+      let moMortgagePrincipal = year <= vals.n_mortgagePayoffYear ? (vals.n_annualMortgagePrincipal / 12) : 0;
 
       curTrad += tradGrowth + moTrad;
       curRoth += rothGrowth + moRoth;
@@ -541,7 +646,6 @@ export default function RetirementApp() {
       curHome += homeGrowth + moMortgagePrincipal;
 
       let salaryCoverage = currentMonthlyExpense * workingRatio;
-      // Note: ssTax increases the total cash needed to survive the month
       let shortfall = currentMonthlyExpense - ssIncome + ssTax - salaryCoverage;
       let monthlyTaxes = ssTax;
       let taxableIncomeTracker = taxableSS + salaryCoverage; 
@@ -558,8 +662,8 @@ export default function RetirementApp() {
           surplus = Math.abs(shortfall); curRoth += surplus; rothSurplus += surplus;
       }
 
-      if (workingRatio === 0 && targetBufferYears > 0) {
-          const targetCash = currentAnnualExpenses * targetBufferYears;
+      if (workingRatio === 0 && vals.n_targetBufferYears > 0) {
+          const targetCash = currentAnnualExpenses * vals.n_targetBufferYears;
           let neededCash = targetCash - curCash;
           if (neededCash > 0) {
               let p3 = drawFromTrad(neededCash, taxableIncomeTracker, 0.12);
@@ -583,7 +687,7 @@ export default function RetirementApp() {
         startBal: startTotal, ssIncome, expenses: currentMonthlyExpense, isFlexed,
         taxes: monthlyTaxes, contribution: moTrad + moRoth + moCash, surplus, netFlow, withdrawal: currentMonthlyExpense - ssIncome - salaryCoverage,
         growth: totalGrowth, endBal: endTotal,
-        endTrad: curTrad, endRoth: curRoth, endCash: curCash, endHome: curHome, crashTriggered: (enableCrash && p1AgeYears === crashAge && p1AgeMonths === 0),
+        endTrad: curTrad, endRoth: curRoth, endCash: curCash, endHome: curHome, crashTriggered: (enableCrash && p1AgeYears === vals.n_crashAge && p1AgeMonths === 0),
         tradFlow: { start: tradStart, contrib: moTrad, growth: tradGrowth, drawnExp: tradDrawnExp, drawnBuf: tradDrawnBuf, tax: tradTax, end: curTrad },
         rothFlow: { start: rothStart, contrib: moRoth, growth: rothGrowth, drawnExp: rothDrawnExp, drawnBuf: rothDrawnBuf, surplus: rothSurplus, end: curRoth },
         cashFlow: { start: cashStart, contrib: moCash, growth: cashGrowth, drawnExp: cashDrawnExp, transferIn: cashTransferIn, end: curCash },
@@ -602,11 +706,12 @@ export default function RetirementApp() {
 
   const optimalRetAge = useMemo(() => {
     if (calcMode !== 'fixed') return null; 
-    const currentAge = Math.floor(((startYear - p1BirthYear) * 12 + (startMonth - p1BirthMonth)) / 12);
-    for (let age = Math.max(currentAge, 30); age <= targetEndAge; age++) {
+    const vals = getSafeValues();
+    const currentAge = Math.floor(((vals.n_startYear - vals.n_p1BirthYear) * 12 + (vals.n_startMonth - vals.n_p1BirthMonth)) / 12);
+    for (let age = Math.max(currentAge, 30); age <= vals.n_targetEndAge; age++) {
       if (calculateProjection(age).endBal >= 0) return age;
     }
-    return `${targetEndAge}+`;
+    return `${vals.n_targetEndAge}+`;
   }, [calcMode, startYear, startMonth, p1BirthYear, p1BirthMonth, p2BirthYear, p2BirthMonth, p2RetirementAge, p1SsStartAge, p2SsStartAge, p1MaxSs, p2MaxSs, numAdults,
     balanceTrad, balanceRoth, balanceCash, homeEquity, annualMortgagePrincipal, mortgagePayoffYear, contribTrad, contribRoth, contribCash, annualReturn, cashReturn, transitionDrop, advancedMode, stateTaxRate,
     targetBufferYears, bufferBuildYears, totalBaseAnnualExpenses, adjustments, targetEndAge, enableCrash, crashAge, crashPercent, swrRate]);
@@ -659,11 +764,28 @@ export default function RetirementApp() {
     const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.setAttribute('download', `retirement_projection_${viewMode}.csv`); link.click();
   };
 
-  const inputClass = "block w-full rounded-md border border-gray-300 py-1.5 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white shadow-sm";
+  const inputClass = "block w-full rounded-md border border-gray-300 py-1.5 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white shadow-sm placeholder-gray-300";
 
   return (
     <div className="flex h-[100dvh] bg-gray-100 font-sans text-gray-900 overflow-hidden relative">
       
+      {/* Clear Data Confirmation Modal */}
+      {isClearModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full border border-gray-200">
+            <div className="flex items-center text-red-600 mb-3">
+              <AlertTriangle className="w-6 h-6 mr-2" />
+              <h3 className="text-lg font-bold text-gray-900">Clear All Data?</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-6">This will reset all assumptions and clear your profile data so you can start from a blank slate. Empty inputs safely fall back to mathematically zero. This cannot be undone.</p>
+            <div className="flex space-x-3">
+              <button onClick={() => setIsClearModalOpen(false)} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg font-bold hover:bg-gray-200 transition-colors">Cancel</button>
+              <button onClick={handleClearData} className="flex-1 py-2 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-colors shadow-sm">Clear Data</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
@@ -698,8 +820,8 @@ export default function RetirementApp() {
 
           <div>
             <h3 className="text-sm font-semibold text-gray-800 border-b pb-1 mb-3">Timeline & Profiles</h3>
-            <InputGroup label="Start Date" icon={Calendar}><div className="flex space-x-2"><select className={inputClass} value={startMonth} onChange={e => setStartMonth(Number(e.target.value))}>{months.map((m, i) => <option value={i} key={m}>{m}</option>)}</select><input type="number" className={inputClass} value={startYear} onChange={e => setStartYear(Number(e.target.value))} /></div></InputGroup>
-            <InputGroup label="Planning Horizon (Age)" icon={Calendar}><input type="number" className={inputClass} value={targetEndAge} onChange={e => setTargetEndAge(Number(e.target.value))} /></InputGroup>
+            <InputGroup label="Start Date" icon={Calendar}><div className="flex space-x-2"><select className={inputClass} value={startMonth} onChange={e => setStartMonth(Number(e.target.value))}>{months.map((m, i) => <option value={i} key={m}>{m}</option>)}</select><NumberInput className={inputClass} value={startYear} onChange={setStartYear} placeholder={currentYear.toString()} /></div></InputGroup>
+            <InputGroup label="Planning Horizon (Age)" icon={Calendar}><NumberInput className={inputClass} value={targetEndAge} onChange={setTargetEndAge} placeholder="100" /></InputGroup>
             <InputGroup label="Adults" icon={Users}><select className={inputClass} value={numAdults} onChange={e => setNumAdults(Number(e.target.value))}><option value={1}>1 Adult</option><option value={2}>2 Adults</option></select></InputGroup>
             
             {calcMode === 'swr' && (
@@ -722,36 +844,36 @@ export default function RetirementApp() {
             {!advancedMode ? (
               <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 mt-4 shadow-sm">
                 <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-3 flex items-center"><Users className="w-4 h-4 mr-1"/> Household Profile</h4>
-                <InputGroup label="Birth Year"><input type="number" className={inputClass} value={p1BirthYear} onChange={e => setP1BirthYear(Number(e.target.value))} /></InputGroup>
-                {calcMode === 'fixed' && <InputGroup label="Retirement Age"><input type="number" className={inputClass} value={p1RetirementAge} onChange={e => setP1RetirementAge(Number(e.target.value))} /></InputGroup>}
-                <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><input type="number" className={inputClass} value={p1SsStartAge} onChange={e => setP1SsStartAge(Number(e.target.value))} /></InputGroup><InputGroup label="SS /mo/pers"><CurrencyInput className={inputClass} value={p1MaxSs} onChange={val => setP1MaxSs(val)} /></InputGroup></div>
+                <InputGroup label="Birth Year"><NumberInput className={inputClass} value={p1BirthYear} onChange={setP1BirthYear} placeholder="1985" /></InputGroup>
+                {calcMode === 'fixed' && <InputGroup label="Retirement Age"><NumberInput className={inputClass} value={p1RetirementAge} onChange={setP1RetirementAge} placeholder="65" /></InputGroup>}
+                <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><NumberInput className={inputClass} value={p1SsStartAge} onChange={setP1SsStartAge} placeholder="67" /></InputGroup><InputGroup label="SS /mo/pers"><CurrencyInput className={inputClass} value={p1MaxSs} onChange={setP1MaxSs} placeholder="$0" /></InputGroup></div>
               </div>
             ) : (
               <>
                 <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 mt-4 shadow-sm">
                   <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-3 flex items-center"><Users className="w-4 h-4 mr-1"/> Person 1</h4>
-                  <InputGroup label="Birth Year"><input type="number" className={inputClass} value={p1BirthYear} onChange={e => setP1BirthYear(Number(e.target.value))} /></InputGroup>
-                  {calcMode === 'fixed' && <InputGroup label="Retirement Age" description="Age at which Person 1 stops working and contributing."><input type="number" className={inputClass} value={p1RetirementAge} onChange={e => setP1RetirementAge(Number(e.target.value))} /></InputGroup>}
-                  <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><input type="number" className={inputClass} value={p1SsStartAge} onChange={e => setP1SsStartAge(Number(e.target.value))} /></InputGroup><InputGroup label="SS /mo"><CurrencyInput className={inputClass} value={p1MaxSs} onChange={val => setP1MaxSs(val)} /></InputGroup></div>
+                  <InputGroup label="Birth Year"><NumberInput className={inputClass} value={p1BirthYear} onChange={setP1BirthYear} placeholder="1985" /></InputGroup>
+                  {calcMode === 'fixed' && <InputGroup label="Retirement Age" description="Age at which Person 1 stops working and contributing."><NumberInput className={inputClass} value={p1RetirementAge} onChange={setP1RetirementAge} placeholder="65" /></InputGroup>}
+                  <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><NumberInput className={inputClass} value={p1SsStartAge} onChange={setP1SsStartAge} placeholder="67" /></InputGroup><InputGroup label="SS /mo"><CurrencyInput className={inputClass} value={p1MaxSs} onChange={setP1MaxSs} placeholder="$0" /></InputGroup></div>
                 </div>
                 {numAdults === 2 && (
                   <div className="bg-purple-50/50 p-3 rounded-lg border border-purple-100 mt-4 shadow-sm">
                     <h4 className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-3 flex items-center"><Users className="w-4 h-4 mr-1"/> Person 2</h4>
-                    <InputGroup label="Birth Year"><input type="number" className={inputClass} value={p2BirthYear} onChange={e => setP2BirthYear(Number(e.target.value))} /></InputGroup>
-                    {calcMode === 'fixed' && <InputGroup label="Retirement Age" description="Age at which Person 2 stops working and contributing."><input type="number" className={inputClass} value={p2RetirementAge} onChange={e => setP2RetirementAge(Number(e.target.value))} /></InputGroup>}
-                    <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><input type="number" className={inputClass} value={p2SsStartAge} onChange={e => setP2SsStartAge(Number(e.target.value))} /></InputGroup><InputGroup label="SS /mo"><CurrencyInput className={inputClass} value={p2MaxSs} onChange={val => setP2MaxSs(val)} /></InputGroup></div>
+                    <InputGroup label="Birth Year"><NumberInput className={inputClass} value={p2BirthYear} onChange={setP2BirthYear} placeholder="1985" /></InputGroup>
+                    {calcMode === 'fixed' && <InputGroup label="Retirement Age" description="Age at which Person 2 stops working and contributing."><NumberInput className={inputClass} value={p2RetirementAge} onChange={setP2RetirementAge} placeholder="65" /></InputGroup>}
+                    <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><NumberInput className={inputClass} value={p2SsStartAge} onChange={setP2SsStartAge} placeholder="67" /></InputGroup><InputGroup label="SS /mo"><CurrencyInput className={inputClass} value={p2MaxSs} onChange={setP2MaxSs} placeholder="$0" /></InputGroup></div>
                   </div>
                 )}
                 {numAdults === 2 && calcMode === 'fixed' && (
                   <div className="bg-amber-50/50 p-3 rounded-lg border border-amber-100 mt-4 shadow-sm">
                     <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-3 flex items-center"><Briefcase className="w-4 h-4 mr-1"/> Transition Phase</h4>
-                    <InputGroup label="Contribution Drop (%)" description="Savings drop when the first person retires. Default: 50%"><input type="number" className={inputClass} value={transitionDrop} onChange={e => setTransitionDrop(Number(e.target.value))} /></InputGroup>
+                    <InputGroup label="Contribution Drop (%)" description="Savings drop when the first person retires. Default: 50%"><NumberInput className={inputClass} value={transitionDrop} onChange={setTransitionDrop} placeholder="50" /></InputGroup>
                   </div>
                 )}
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 mt-4 shadow-sm">
                   <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-3 flex items-center"><DollarSign className="w-4 h-4 mr-1"/> Tax Assumptions</h4>
                   <InputGroup label="State Income Tax Rate (%)" description="Applied to taxable withdrawals & taxable portion of SS.">
-                    <input type="number" step="0.1" className={inputClass} value={stateTaxRate} onChange={e => setStateTaxRate(Number(e.target.value))} />
+                    <NumberInput step="0.1" className={inputClass} value={stateTaxRate} onChange={setStateTaxRate} placeholder="0.0" />
                   </InputGroup>
                 </div>
               </>
@@ -761,27 +883,27 @@ export default function RetirementApp() {
           <div>
              <h3 className="text-sm font-semibold text-gray-800 border-b pb-1 mb-3">Combined Net Worth & Savings</h3>
              <div className="space-y-2 mb-4">
-               <InputGroup label="Traditional 401k/IRA Balance" icon={DollarSign}><CurrencyInput className={inputClass} value={balanceTrad} onChange={val => setBalanceTrad(val)} /></InputGroup>
-               <InputGroup label="Roth IRA/401k (Invested)" icon={DollarSign}><CurrencyInput className={inputClass} value={balanceRoth} onChange={val => setBalanceRoth(val)} /></InputGroup>
-               <InputGroup label="Roth Cash Reserves / Safe Buffer" icon={Wallet} description="Held as cash inside tax-advantaged accounts."><CurrencyInput className={inputClass} value={balanceCash} onChange={val => setBalanceCash(val)} /></InputGroup>
-               <InputGroup label="Primary Residence Equity" icon={Home}><CurrencyInput className={inputClass} value={homeEquity} onChange={val => setHomeEquity(val)} /></InputGroup>
-               <InputGroup label="Annual Mortgage Principal" description="Principal paid per year (adds to equity)."><CurrencyInput className={inputClass} value={annualMortgagePrincipal} onChange={val => setAnnualMortgagePrincipal(val)} /></InputGroup>
-               <InputGroup label="Mortgage Payoff Year" description="Year when the mortgage is fully paid."><input type="number" className={inputClass} value={mortgagePayoffYear} onChange={e => setMortgagePayoffYear(Number(e.target.value))} /></InputGroup>
+               <InputGroup label="Traditional 401k/IRA Balance" icon={DollarSign}><CurrencyInput className={inputClass} value={balanceTrad} onChange={setBalanceTrad} placeholder="$0" /></InputGroup>
+               <InputGroup label="Roth IRA/401k (Invested)" icon={DollarSign}><CurrencyInput className={inputClass} value={balanceRoth} onChange={setBalanceRoth} placeholder="$0" /></InputGroup>
+               <InputGroup label="Roth Cash Reserves / Safe Buffer" icon={Wallet} description="Held as cash inside tax-advantaged accounts."><CurrencyInput className={inputClass} value={balanceCash} onChange={setBalanceCash} placeholder="$0" /></InputGroup>
+               <InputGroup label="Primary Residence Equity" icon={Home}><CurrencyInput className={inputClass} value={homeEquity} onChange={setHomeEquity} placeholder="$0" /></InputGroup>
+               <InputGroup label="Annual Mortgage Principal" description="Principal paid per year (adds to equity)."><CurrencyInput className={inputClass} value={annualMortgagePrincipal} onChange={setAnnualMortgagePrincipal} placeholder="$0" /></InputGroup>
+               <InputGroup label="Mortgage Payoff Year" description="Year when the mortgage is fully paid."><NumberInput className={inputClass} value={mortgagePayoffYear} onChange={setMortgagePayoffYear} placeholder="2045" /></InputGroup>
              </div>
 
              <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2 flex items-center"><Briefcase className="w-4 h-4 mr-1.5 text-gray-400"/> Annual Contributions</h4>
-             <InputGroup label="To Traditional 401k/IRA"><CurrencyInput className={inputClass} value={contribTrad} onChange={val => setContribTrad(val)} /></InputGroup>
-             <InputGroup label="To Roth Accounts (Invested)"><CurrencyInput className={inputClass} value={contribRoth} onChange={val => setContribRoth(val)} /></InputGroup>
-             <InputGroup label="To Roth Accounts (Cash reserves)"><CurrencyInput className={inputClass} value={contribCash} onChange={val => setContribCash(val)} /></InputGroup>
+             <InputGroup label="To Traditional 401k/IRA"><CurrencyInput className={inputClass} value={contribTrad} onChange={setContribTrad} placeholder="$0" /></InputGroup>
+             <InputGroup label="To Roth Accounts (Invested)"><CurrencyInput className={inputClass} value={contribRoth} onChange={setContribRoth} placeholder="$0" /></InputGroup>
+             <InputGroup label="To Roth Accounts (Cash reserves)"><CurrencyInput className={inputClass} value={contribCash} onChange={setContribCash} placeholder="$0" /></InputGroup>
              
-             <InputGroup label="Inv. Real Return (%)" icon={TrendingUp}><input type="number" step="0.1" className={inputClass} value={annualReturn} onChange={e => setAnnualReturn(Number(e.target.value))} /></InputGroup>
-             <InputGroup label="Buffer Real Return (%)" icon={Shield}><input type="number" step="0.1" className={inputClass} value={cashReturn} onChange={e => setCashReturn(Number(e.target.value))} /></InputGroup>
+             <InputGroup label="Inv. Real Return (%)" icon={TrendingUp}><NumberInput step="0.1" className={inputClass} value={annualReturn} onChange={setAnnualReturn} placeholder="0.0" /></InputGroup>
+             <InputGroup label="Buffer Real Return (%)" icon={Shield}><NumberInput step="0.1" className={inputClass} value={cashReturn} onChange={setCashReturn} placeholder="0.0" /></InputGroup>
              
              {advancedMode && (
                 <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm">
                   <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-wider mb-2 flex items-center"><Shield className="w-4 h-4 mr-1.5"/> Buffer Build Strategy</h4>
-                  <InputGroup label="Build Window (Years before retirement)" description="Period to divert Roth Invested into Roth Cash reserves."><input type="number" className={inputClass} value={bufferBuildYears} onChange={e => setBufferBuildYears(Number(e.target.value))} /></InputGroup>
-                  <InputGroup label="Target Size (Years of Expenses)"><input type="number" step="0.5" className={inputClass} value={targetBufferYears} onChange={e => setTargetBufferYears(Number(e.target.value))} /></InputGroup>
+                  <InputGroup label="Build Window (Years before retirement)" description="Period to divert Roth Invested into Roth Cash reserves."><NumberInput className={inputClass} value={bufferBuildYears} onChange={setBufferBuildYears} placeholder="0" /></InputGroup>
+                  <InputGroup label="Target Size (Years of Expenses)"><NumberInput step="0.5" className={inputClass} value={targetBufferYears} onChange={setTargetBufferYears} placeholder="0.0" /></InputGroup>
                 </div>
              )}
           </div>
@@ -789,12 +911,12 @@ export default function RetirementApp() {
           <div className="bg-red-50/50 p-3 rounded-lg border border-red-100 shadow-sm">
             <h3 className="text-xs font-bold text-red-800 uppercase tracking-wider mb-3 flex items-center"><Activity className="w-4 h-4 mr-1"/> Stress Tester</h3>
             <div className="flex items-center mb-3"><input type="checkbox" className="w-4 h-4 mr-2" checked={enableCrash} onChange={e => setEnableCrash(e.target.checked)} /><span className="text-xs font-bold text-red-800">Simulate Market Crash</span></div>
-            {enableCrash && <div className="grid grid-cols-2 gap-4"><InputGroup label={advancedMode && numAdults === 2 ? "At P1 Age" : "At Age"}><input type="number" className={inputClass} value={crashAge} onChange={e => setCrashAge(Number(e.target.value))} /></InputGroup><InputGroup label="Drop %"><input type="number" className={inputClass} value={crashPercent} onChange={e => setCrashPercent(Number(e.target.value))} /></InputGroup></div>}
+            {enableCrash && <div className="grid grid-cols-2 gap-4"><InputGroup label={advancedMode && numAdults === 2 ? "At P1 Age" : "At Age"}><NumberInput className={inputClass} value={crashAge} onChange={setCrashAge} placeholder="55" /></InputGroup><InputGroup label="Drop %"><NumberInput className={inputClass} value={crashPercent} onChange={setCrashPercent} placeholder="0" /></InputGroup></div>}
           </div>
           
           <div>
              <div className="flex justify-between items-end border-b pb-1 mb-3"><h3 className="text-sm font-semibold text-gray-800">Annual Budget</h3><span className="text-xs font-bold text-blue-600">{formatCurrency(totalBaseAnnualExpenses)}/yr</span></div>
-             <div className="space-y-3">{Object.keys(expenses).map(k => <div key={k} className="flex items-center space-x-2"><div className="w-1/2 text-xs text-gray-600 capitalize">{k}</div><CurrencyInput className={`${inputClass} w-1/2`} value={expenses[k]} onChange={val => handleExpenseChange(k, val)} /></div>)}</div>
+             <div className="space-y-3">{Object.keys(expenses).map(k => <div key={k} className="flex items-center space-x-2"><div className="w-1/2 text-xs text-gray-600 capitalize">{k}</div><CurrencyInput className={`${inputClass} w-1/2`} value={expenses[k]} onChange={val => handleExpenseChange(k, val)} placeholder="$0" /></div>)}</div>
           </div>
           <div className="pb-6">
              <div className="flex justify-between items-end border-b pb-2 mb-4">
@@ -833,11 +955,11 @@ export default function RetirementApp() {
                      </div>
                      <div>
                        <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1">When</label>
-                       <input type="number" className={`${inputClass} !py-1 !px-2 text-xs`} value={adj.trigger} onChange={e => updateAdjustment(adj.id, 'trigger', Number(e.target.value))} />
+                       <NumberInput className={`${inputClass} !py-1 !px-2 text-xs`} value={adj.trigger} onChange={val => updateAdjustment(adj.id, 'trigger', val)} placeholder="0" />
                      </div>
                      <div>
                        <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1">Amount /yr</label>
-                       <CurrencyInput className={`${inputClass} !py-1 !px-2 text-xs ${adj.amount < 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}`} value={adj.amount} onChange={val => updateAdjustment(adj.id, 'amount', val)} />
+                       <CurrencyInput className={`${inputClass} !py-1 !px-2 text-xs ${adj.amount < 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}`} value={adj.amount} onChange={val => updateAdjustment(adj.id, 'amount', val)} placeholder="$0" />
                      </div>
                    </div>
                  </div>
@@ -850,7 +972,6 @@ export default function RetirementApp() {
         </div>
       </div>
 
-      {/* --- MAIN PANEL (Scrollable Page) --- */}
       <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden bg-gray-50 min-w-0 w-full custom-scrollbar">
         <div className="flex flex-col sm:flex-row flex-wrap sm:flex-nowrap items-start sm:items-center justify-between p-3 sm:p-4 bg-white border-b border-gray-200 flex-shrink-0 gap-2 sm:gap-3">
           <div className="flex items-center">
@@ -864,8 +985,15 @@ export default function RetirementApp() {
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <div className="flex bg-gray-100 p-1 rounded-lg border space-x-1 flex-1 sm:flex-none justify-center">
-              <button onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none justify-center px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 hover:bg-white hover:shadow-sm transition-colors flex items-center"><Upload className="w-4 h-4 mr-1.5 hidden sm:block" /> Load</button>
-              <button onClick={handleExportSettings} className="flex-1 sm:flex-none justify-center px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 hover:bg-white hover:shadow-sm transition-colors flex items-center"><Save className="w-4 h-4 mr-1.5 hidden sm:block" /> Save</button>
+              <button onClick={() => setIsClearModalOpen(true)} className="flex-1 sm:flex-none justify-center px-3 py-1.5 text-sm font-medium rounded-md text-red-600 hover:bg-white hover:text-red-700 hover:shadow-sm transition-colors flex items-center">
+                <RotateCcw className="w-4 h-4 sm:mr-1.5" /> <span className="hidden sm:inline">Reset</span>
+              </button>
+              <button onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none justify-center px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 hover:bg-white hover:shadow-sm transition-colors flex items-center">
+                <Upload className="w-4 h-4 sm:mr-1.5" /> <span className="hidden sm:inline">Load</span>
+              </button>
+              <button onClick={handleExportSettings} className="flex-1 sm:flex-none justify-center px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 hover:bg-white hover:shadow-sm transition-colors flex items-center">
+                <Save className="w-4 h-4 sm:mr-1.5" /> <span className="hidden sm:inline">Save</span>
+              </button>
               <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportSettings} className="hidden" />
             </div>
             <div className="flex bg-gray-100 p-1 rounded-lg border flex-1 sm:flex-none justify-center">
@@ -877,11 +1005,11 @@ export default function RetirementApp() {
           </div>
         </div>
 
-        {/* Dashboard Cards (Horizontal scroll on mobile to save vertical space) */}
+        {/* Dashboard Cards */}
         <div className="flex-shrink-0 flex md:grid md:grid-cols-2 xl:grid-cols-4 overflow-x-auto gap-4 p-4 snap-x custom-scrollbar pb-4">
           <div className="min-w-[80vw] sm:min-w-[240px] md:min-w-0 flex-shrink-0 snap-center p-4 rounded-xl bg-white border shadow-sm flex flex-col justify-center">
              <div className="text-sm text-gray-500 font-semibold mb-1 truncate">Starting Net Worth</div>
-             <div className="text-2xl font-bold text-gray-800">{formatCurrency(startingTotalBalance)}</div>
+             <div className="text-2xl font-bold text-gray-800">{formatCurrency(startingTotalBalance || 0)}</div>
           </div>
           
           {calcMode === 'fixed' ? (
@@ -898,12 +1026,12 @@ export default function RetirementApp() {
 
           <div className="min-w-[80vw] sm:min-w-[240px] md:min-w-0 flex-shrink-0 snap-center p-4 rounded-xl bg-purple-50 border border-purple-200 shadow-sm flex flex-col justify-center">
              <div className="text-sm text-purple-600 font-semibold mb-1 truncate">Net Worth at Retirement</div>
-             <div className="text-2xl font-bold text-purple-900 truncate">{formatCurrency(netWorthAtRetirement)}</div>
+             <div className="text-2xl font-bold text-purple-900 truncate">{formatCurrency(netWorthAtRetirement || 0)}</div>
           </div>
           
-          <div className={`min-w-[80vw] sm:min-w-[240px] md:min-w-0 flex-shrink-0 snap-center p-4 rounded-xl border shadow-sm flex flex-col justify-center overflow-hidden ${endOfPlanBal > 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-             <div className={`text-sm font-semibold mb-1 truncate ${endOfPlanBal > 0 ? 'text-green-600' : 'text-red-600'}`}>Ending Net Worth (Age {targetEndAge})</div>
-             <div className={`text-2xl font-bold truncate ${endOfPlanBal > 0 ? 'text-green-900' : 'text-red-900'}`}>{formatCurrency(endOfPlanBal)}</div>
+          <div className={`min-w-[80vw] sm:min-w-[240px] md:min-w-0 flex-shrink-0 snap-center p-4 rounded-xl border shadow-sm flex flex-col justify-center overflow-hidden ${(endOfPlanBal || 0) >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+             <div className={`text-sm font-semibold mb-1 truncate ${(endOfPlanBal || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>Ending Net Worth (Age {targetEndAge || 0})</div>
+             <div className={`text-2xl font-bold truncate ${(endOfPlanBal || 0) >= 0 ? 'text-green-900' : 'text-red-900'}`}>{formatCurrency(endOfPlanBal || 0)}</div>
           </div>
         </div>
 
