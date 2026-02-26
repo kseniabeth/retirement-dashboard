@@ -773,8 +773,14 @@ export default function RetirementApp() {
       
       {/* Clear Data Confirmation Modal */}
       {isClearModalOpen && (
-        <div className="fixed inset-0 bg-slate-900 bg-opacity-60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-slate-200 transform transition-all">
+        <div 
+          className="fixed inset-0 bg-transparent z-[100] flex items-center justify-center p-4"
+          onClick={() => setIsClearModalOpen(false)}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-slate-200 transform transition-all"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center text-red-600 mb-3">
               <AlertTriangle className="w-6 h-6 mr-2" />
               <h3 className="text-lg font-bold text-slate-900">Clear All Data?</h3>
