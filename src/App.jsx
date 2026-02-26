@@ -129,6 +129,7 @@ export default function RetirementApp() {
   // Projection Goal Modes
   const [calcMode, setCalcMode] = useState('fixed'); 
   const [swrRate, setSwrRate] = useState(4.0); 
+  const [isCustomSwr, setIsCustomSwr] = useState(false);
 
   const [numAdults, setNumAdults] = useState(2);
   
@@ -235,7 +236,7 @@ export default function RetirementApp() {
     setAdjustments([]);
 
     // Selectors cleanly fallback to defaults instead of blank breaking them
-    setStartMonth(0); setNumAdults(2); setSwrRate(4.0); setEnableCrash(false);
+    setStartMonth(0); setNumAdults(2); setSwrRate(4.0); setIsCustomSwr(false); setEnableCrash(false);
     
     setIsClearModalOpen(false);
   };
@@ -243,7 +244,7 @@ export default function RetirementApp() {
   // --- SETTINGS IMPORT & EXPORT ---
   const handleExportSettings = () => {
     const settings = {
-      advancedMode, calcMode, swrRate, numAdults, targetEndAge,
+      advancedMode, calcMode, swrRate, isCustomSwr, numAdults, targetEndAge,
       startYear, startMonth, 
       p1BirthYear, p1BirthMonth, p1RetirementAge, p1SsStartAge, p1MaxSs,
       p2BirthYear, p2BirthMonth, p2RetirementAge, p2SsStartAge, p2MaxSs,
@@ -275,7 +276,16 @@ export default function RetirementApp() {
         
         if (settings.advancedMode !== undefined) setAdvancedMode(settings.advancedMode);
         if (settings.calcMode !== undefined) setCalcMode(settings.calcMode);
-        if (settings.swrRate !== undefined) setSwrRate(Number(settings.swrRate));
+        
+        if (settings.swrRate !== undefined) {
+          setSwrRate(Number(settings.swrRate));
+          if (settings.isCustomSwr !== undefined) {
+            setIsCustomSwr(settings.isCustomSwr);
+          } else {
+            setIsCustomSwr(![4.0, 4.5, 5.2].includes(Number(settings.swrRate)));
+          }
+        }
+
         if (settings.targetEndAge !== undefined) setTargetEndAge(loadVal(settings.targetEndAge));
         if (settings.startYear !== undefined) setStartYear(loadVal(settings.startYear));
         if (settings.startMonth !== undefined) setStartMonth(Number(settings.startMonth));
@@ -365,7 +375,9 @@ export default function RetirementApp() {
 
     const n_crashAge = crashAge === '' ? 55 : Number(crashAge);
     const n_crashPercent = Number(crashPercent) || 0;
-    const n_swrRate = swrRate === '' ? 4.0 : Number(swrRate);
+    
+    let n_swrRate = Number(swrRate);
+    if (isNaN(n_swrRate) || n_swrRate <= 0) n_swrRate = 0.1; // Safely prevent division by zero or negative SWR
     
     return {
        n_startYear, n_startMonth, n_targetEndAge,
@@ -564,8 +576,8 @@ export default function RetirementApp() {
 
       let isFlexed = false;
       if (hasCrashed && workingRatio === 0) {
-        if (vals.n_swrRate === 5.2) { currentAnnualExpenses *= 0.90; isFlexed = true; } 
-        else if (vals.n_swrRate === 4.5) { currentAnnualExpenses *= 0.95; isFlexed = true; }
+        if (!isCustomSwr && vals.n_swrRate === 5.2) { currentAnnualExpenses *= 0.90; isFlexed = true; } 
+        else if (!isCustomSwr && vals.n_swrRate === 4.5) { currentAnnualExpenses *= 0.95; isFlexed = true; }
       }
       const currentMonthlyExpense = currentAnnualExpenses / 12;
 
@@ -703,7 +715,7 @@ export default function RetirementApp() {
   const data = useMemo(() => calculateProjection(activeP1RetAge).records, [
     startYear, startMonth, p1BirthYear, p1BirthMonth, p2BirthYear, p2BirthMonth, activeP1RetAge, p2RetirementAge, p1SsStartAge, p2SsStartAge, p1MaxSs, p2MaxSs, numAdults,
     balanceTrad, balanceRoth, balanceCash, homeEquity, annualMortgagePrincipal, mortgagePayoffYear, contribTrad, contribRoth, contribCash, annualReturn, cashReturn, transitionDrop, advancedMode, stateTaxRate,
-    targetBufferYears, bufferBuildYears, totalBaseAnnualExpenses, adjustments, targetEndAge, enableCrash, crashAge, crashPercent, swrRate
+    targetBufferYears, bufferBuildYears, totalBaseAnnualExpenses, adjustments, targetEndAge, enableCrash, crashAge, crashPercent, swrRate, isCustomSwr
   ]);
 
   const optimalRetAge = useMemo(() => {
@@ -716,7 +728,7 @@ export default function RetirementApp() {
     return `${vals.n_targetEndAge}+`;
   }, [calcMode, startYear, startMonth, p1BirthYear, p1BirthMonth, p2BirthYear, p2BirthMonth, p2RetirementAge, p1SsStartAge, p2SsStartAge, p1MaxSs, p2MaxSs, numAdults,
     balanceTrad, balanceRoth, balanceCash, homeEquity, annualMortgagePrincipal, mortgagePayoffYear, contribTrad, contribRoth, contribCash, annualReturn, cashReturn, transitionDrop, advancedMode, stateTaxRate,
-    targetBufferYears, bufferBuildYears, totalBaseAnnualExpenses, adjustments, targetEndAge, enableCrash, crashAge, crashPercent, swrRate]);
+    targetBufferYears, bufferBuildYears, totalBaseAnnualExpenses, adjustments, targetEndAge, enableCrash, crashAge, crashPercent, swrRate, isCustomSwr]);
 
   const yearlyData = useMemo(() => {
     const yearsMap = new Map();
@@ -827,16 +839,40 @@ export default function RetirementApp() {
             </div>
             {calcMode === 'swr' && (
               <InputGroup label="Withdrawal Strategy (SWR)" description="Calculates retirement age based on portfolio target.">
-                <select className={inputClass} value={swrRate} onChange={e => setSwrRate(Number(e.target.value))}>
-                  <option value={4.0}>Zero Flex (4.0% SWR)</option>
-                  <option value={4.5}>Moderate Flex (4.5% SWR)</option>
-                  <option value={5.2}>High Flex (5.2% SWR)</option>
-                </select>
+                <div className="flex space-x-2">
+                  <select 
+                    className={`${inputClass} ${isCustomSwr ? 'w-2/3' : 'w-full'}`} 
+                    value={isCustomSwr ? 'custom' : swrRate} 
+                    onChange={e => {
+                      if (e.target.value === 'custom') {
+                        setIsCustomSwr(true);
+                      } else {
+                        setIsCustomSwr(false);
+                        setSwrRate(Number(e.target.value));
+                      }
+                    }}
+                  >
+                    <option value={4.0}>Zero Flex (4.0% SWR)</option>
+                    <option value={4.5}>Moderate Flex (4.5% SWR)</option>
+                    <option value={5.2}>High Flex (5.2% SWR)</option>
+                    <option value="custom">Custom...</option>
+                  </select>
+                  {isCustomSwr && (
+                    <NumberInput 
+                      className={`${inputClass} w-1/3`} 
+                      value={swrRate} 
+                      onChange={setSwrRate} 
+                      placeholder="%" 
+                      step="0.1" 
+                    />
+                  )}
+                </div>
                 <div className="bg-indigo-50/50 border border-indigo-100 p-2 mt-2 rounded-lg">
                   <p className="text-[10px] text-indigo-700 font-medium leading-snug">
-                    {swrRate === 4.0 && "The 4% Rule: Adjust for inflation every year, never reduce spending."}
-                    {swrRate === 4.5 && "The 'No Raise' Rule: Skip inflation adjustments during negative market years."}
-                    {swrRate === 5.2 && "Guardrails Strategy: Cut spending by ~10% during severe market drops."}
+                    {!isCustomSwr && swrRate === 4.0 && "The 4% Rule: Adjust for inflation every year, never reduce spending."}
+                    {!isCustomSwr && swrRate === 4.5 && "The 'No Raise' Rule: Skip inflation adjustments during negative market years."}
+                    {!isCustomSwr && swrRate === 5.2 && "Guardrails Strategy: Cut spending by ~10% during severe market drops."}
+                    {isCustomSwr && "Custom Strategy: Uses your specified rate to determine your required portfolio target."}
                   </p>
                 </div>
               </InputGroup>
