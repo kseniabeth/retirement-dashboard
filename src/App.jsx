@@ -25,6 +25,57 @@ const InputGroup = ({ label, children, icon: Icon, description }) => (
   </div>
 );
 
+// Currency Input Component for Assumptions UI
+const CurrencyInput = ({ value, onChange, className }) => {
+  const formatStr = (val) => {
+    if (val === undefined || val === null) return '';
+    const isNeg = val < 0;
+    const numStr = Math.abs(val).toLocaleString('en-US');
+    return isNeg ? `-$${numStr}` : `$${numStr}`;
+  };
+
+  const [localVal, setLocalVal] = useState(() => formatStr(value));
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (document.activeElement !== ref.current) {
+      setLocalVal(formatStr(value));
+    }
+  }, [value]);
+
+  const handleChange = (e) => {
+    const raw = e.target.value;
+    setLocalVal(raw);
+    const parsed = raw.replace(/[^0-9.-]+/g, '');
+    if (parsed !== '' && parsed !== '-') {
+      const num = Number(parsed);
+      if (!isNaN(num)) onChange(num);
+    }
+  };
+
+  const handleBlur = () => {
+    const parsed = localVal.replace(/[^0-9.-]+/g, '');
+    let num = 0;
+    if (parsed !== '' && parsed !== '-') {
+      num = Number(parsed);
+      if (isNaN(num)) num = 0;
+    }
+    setLocalVal(formatStr(num));
+    onChange(num);
+  };
+
+  return (
+    <input
+      ref={ref}
+      type="text"
+      className={className}
+      value={localVal}
+      onChange={handleChange}
+      onBlur={handleBlur}
+    />
+  );
+};
+
 // Helper component for the Expanded Math Breakdown Row
 const MathRow = ({ label, val, isNeg, isPos }) => {
   if (val === undefined || Math.abs(val) < 0.01) return null; 
@@ -181,17 +232,6 @@ export default function RetirementApp() {
         if (settings.startMonth !== undefined) setStartMonth(Number(settings.startMonth));
         if (settings.numAdults !== undefined) setNumAdults(Number(settings.numAdults));
         
-        if (settings.birthYear !== undefined) setP1BirthYear(Number(settings.birthYear));
-        if (settings.birthYear !== undefined) setP2BirthYear(Number(settings.birthYear));
-        if (settings.birthMonth !== undefined) setP1BirthMonth(Number(settings.birthMonth));
-        if (settings.birthMonth !== undefined) setP2BirthMonth(Number(settings.birthMonth));
-        if (settings.retirementAge !== undefined) setP1RetirementAge(Number(settings.retirementAge));
-        if (settings.retirementAge !== undefined) setP2RetirementAge(Number(settings.retirementAge));
-        if (settings.ssStartAge !== undefined) setP1SsStartAge(Number(settings.ssStartAge));
-        if (settings.ssStartAge !== undefined) setP2SsStartAge(Number(settings.ssStartAge));
-        if (settings.maxSsPerPerson !== undefined) setP1MaxSs(Number(settings.maxSsPerPerson));
-        if (settings.maxSsPerPerson !== undefined) setP2MaxSs(Number(settings.maxSsPerPerson));
-
         if (settings.p1BirthYear !== undefined) setP1BirthYear(Number(settings.p1BirthYear));
         if (settings.p1BirthMonth !== undefined) setP1BirthMonth(Number(settings.p1BirthMonth));
         if (settings.p1RetirementAge !== undefined) setP1RetirementAge(Number(settings.p1RetirementAge));
@@ -622,18 +662,18 @@ export default function RetirementApp() {
   const inputClass = "block w-full rounded-md border border-gray-300 py-1.5 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white shadow-sm";
 
   return (
-    <div className="flex h-screen bg-gray-100 font-sans text-gray-900 overflow-hidden relative">
+    <div className="flex h-[100dvh] bg-gray-100 font-sans text-gray-900 overflow-hidden relative">
       
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden transition-opacity" 
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
 
       {/* --- SIDEBAR --- */}
-      <div className={`fixed inset-y-0 left-0 z-50 w-full sm:w-96 bg-white border-r border-gray-200 flex flex-col shadow-2xl md:shadow-sm transform transition-transform duration-300 md:relative md:translate-x-0 flex-shrink-0 overflow-y-auto custom-scrollbar ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <div className={`fixed inset-y-0 left-0 z-50 w-[85%] sm:w-96 bg-white border-r border-gray-200 flex flex-col shadow-2xl md:shadow-sm transform transition-transform duration-300 md:relative md:translate-x-0 flex-shrink-0 overflow-y-auto custom-scrollbar ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-4 border-b bg-gray-50 sticky top-0 z-10 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2"><Settings className="w-5 h-5 text-gray-500" /> <h2 className="text-lg font-bold text-gray-800">Assumptions</h2></div>
@@ -683,8 +723,8 @@ export default function RetirementApp() {
               <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 mt-4 shadow-sm">
                 <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-3 flex items-center"><Users className="w-4 h-4 mr-1"/> Household Profile</h4>
                 <InputGroup label="Birth Year"><input type="number" className={inputClass} value={p1BirthYear} onChange={e => setP1BirthYear(Number(e.target.value))} /></InputGroup>
-                {calcMode === 'fixed' && <InputGroup label="Retirement Age"><input type="number" className={inputClass} value={p1RetirementAge} onChange={e => setRetirementAge(Number(e.target.value))} /></InputGroup>}
-                <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><input type="number" className={inputClass} value={p1SsStartAge} onChange={e => setP1SsStartAge(Number(e.target.value))} /></InputGroup><InputGroup label="SS /mo/pers"><input type="number" className={inputClass} value={p1MaxSs} onChange={e => setP1MaxSs(Number(e.target.value))} /></InputGroup></div>
+                {calcMode === 'fixed' && <InputGroup label="Retirement Age"><input type="number" className={inputClass} value={p1RetirementAge} onChange={e => setP1RetirementAge(Number(e.target.value))} /></InputGroup>}
+                <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><input type="number" className={inputClass} value={p1SsStartAge} onChange={e => setP1SsStartAge(Number(e.target.value))} /></InputGroup><InputGroup label="SS /mo/pers"><CurrencyInput className={inputClass} value={p1MaxSs} onChange={val => setP1MaxSs(val)} /></InputGroup></div>
               </div>
             ) : (
               <>
@@ -692,14 +732,14 @@ export default function RetirementApp() {
                   <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-3 flex items-center"><Users className="w-4 h-4 mr-1"/> Person 1</h4>
                   <InputGroup label="Birth Year"><input type="number" className={inputClass} value={p1BirthYear} onChange={e => setP1BirthYear(Number(e.target.value))} /></InputGroup>
                   {calcMode === 'fixed' && <InputGroup label="Retirement Age" description="Age at which Person 1 stops working and contributing."><input type="number" className={inputClass} value={p1RetirementAge} onChange={e => setP1RetirementAge(Number(e.target.value))} /></InputGroup>}
-                  <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><input type="number" className={inputClass} value={p1SsStartAge} onChange={e => setP1SsStartAge(Number(e.target.value))} /></InputGroup><InputGroup label="SS /mo"><input type="number" className={inputClass} value={p1MaxSs} onChange={e => setP1MaxSs(Number(e.target.value))} /></InputGroup></div>
+                  <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><input type="number" className={inputClass} value={p1SsStartAge} onChange={e => setP1SsStartAge(Number(e.target.value))} /></InputGroup><InputGroup label="SS /mo"><CurrencyInput className={inputClass} value={p1MaxSs} onChange={val => setP1MaxSs(val)} /></InputGroup></div>
                 </div>
                 {numAdults === 2 && (
                   <div className="bg-purple-50/50 p-3 rounded-lg border border-purple-100 mt-4 shadow-sm">
                     <h4 className="text-xs font-bold text-purple-800 uppercase tracking-wider mb-3 flex items-center"><Users className="w-4 h-4 mr-1"/> Person 2</h4>
                     <InputGroup label="Birth Year"><input type="number" className={inputClass} value={p2BirthYear} onChange={e => setP2BirthYear(Number(e.target.value))} /></InputGroup>
                     {calcMode === 'fixed' && <InputGroup label="Retirement Age" description="Age at which Person 2 stops working and contributing."><input type="number" className={inputClass} value={p2RetirementAge} onChange={e => setP2RetirementAge(Number(e.target.value))} /></InputGroup>}
-                    <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><input type="number" className={inputClass} value={p2SsStartAge} onChange={e => setP2SsStartAge(Number(e.target.value))} /></InputGroup><InputGroup label="SS /mo"><input type="number" className={inputClass} value={p2MaxSs} onChange={e => setP2MaxSs(Number(e.target.value))} /></InputGroup></div>
+                    <div className="grid grid-cols-2 gap-4"><InputGroup label="SS Age"><input type="number" className={inputClass} value={p2SsStartAge} onChange={e => setP2SsStartAge(Number(e.target.value))} /></InputGroup><InputGroup label="SS /mo"><CurrencyInput className={inputClass} value={p2MaxSs} onChange={val => setP2MaxSs(val)} /></InputGroup></div>
                   </div>
                 )}
                 {numAdults === 2 && calcMode === 'fixed' && (
@@ -721,18 +761,18 @@ export default function RetirementApp() {
           <div>
              <h3 className="text-sm font-semibold text-gray-800 border-b pb-1 mb-3">Combined Net Worth & Savings</h3>
              <div className="space-y-2 mb-4">
-               <InputGroup label="Traditional 401k/IRA Balance" icon={DollarSign}><input type="number" step="10000" className={inputClass} value={balanceTrad} onChange={e => setBalanceTrad(Number(e.target.value))} /></InputGroup>
-               <InputGroup label="Roth IRA/401k (Invested)" icon={DollarSign}><input type="number" step="10000" className={inputClass} value={balanceRoth} onChange={e => setBalanceRoth(Number(e.target.value))} /></InputGroup>
-               <InputGroup label="Roth Cash Reserves / Safe Buffer" icon={Wallet} description="Held as cash inside tax-advantaged accounts."><input type="number" step="10000" className={inputClass} value={balanceCash} onChange={e => setBalanceCash(Number(e.target.value))} /></InputGroup>
-               <InputGroup label="Primary Residence Equity" icon={Home}><input type="number" step="10000" className={inputClass} value={homeEquity} onChange={e => setHomeEquity(Number(e.target.value))} /></InputGroup>
-               <InputGroup label="Annual Mortgage Principal" description="Principal paid per year (adds to equity)."><input type="number" step="1000" className={inputClass} value={annualMortgagePrincipal} onChange={e => setAnnualMortgagePrincipal(Number(e.target.value))} /></InputGroup>
+               <InputGroup label="Traditional 401k/IRA Balance" icon={DollarSign}><CurrencyInput className={inputClass} value={balanceTrad} onChange={val => setBalanceTrad(val)} /></InputGroup>
+               <InputGroup label="Roth IRA/401k (Invested)" icon={DollarSign}><CurrencyInput className={inputClass} value={balanceRoth} onChange={val => setBalanceRoth(val)} /></InputGroup>
+               <InputGroup label="Roth Cash Reserves / Safe Buffer" icon={Wallet} description="Held as cash inside tax-advantaged accounts."><CurrencyInput className={inputClass} value={balanceCash} onChange={val => setBalanceCash(val)} /></InputGroup>
+               <InputGroup label="Primary Residence Equity" icon={Home}><CurrencyInput className={inputClass} value={homeEquity} onChange={val => setHomeEquity(val)} /></InputGroup>
+               <InputGroup label="Annual Mortgage Principal" description="Principal paid per year (adds to equity)."><CurrencyInput className={inputClass} value={annualMortgagePrincipal} onChange={val => setAnnualMortgagePrincipal(val)} /></InputGroup>
                <InputGroup label="Mortgage Payoff Year" description="Year when the mortgage is fully paid."><input type="number" className={inputClass} value={mortgagePayoffYear} onChange={e => setMortgagePayoffYear(Number(e.target.value))} /></InputGroup>
              </div>
 
              <h4 className="text-xs font-bold text-gray-600 uppercase tracking-wider mb-2 flex items-center"><Briefcase className="w-4 h-4 mr-1.5 text-gray-400"/> Annual Contributions</h4>
-             <InputGroup label="To Traditional 401k/IRA"><input type="number" step="1000" className={inputClass} value={contribTrad} onChange={e => setContribTrad(Number(e.target.value))} /></InputGroup>
-             <InputGroup label="To Roth Accounts (Invested)"><input type="number" step="1000" className={inputClass} value={contribRoth} onChange={e => setContribRoth(Number(e.target.value))} /></InputGroup>
-             <InputGroup label="To Roth Accounts (Cash reserves)"><input type="number" step="1000" className={inputClass} value={contribCash} onChange={e => setContribCash(Number(e.target.value))} /></InputGroup>
+             <InputGroup label="To Traditional 401k/IRA"><CurrencyInput className={inputClass} value={contribTrad} onChange={val => setContribTrad(val)} /></InputGroup>
+             <InputGroup label="To Roth Accounts (Invested)"><CurrencyInput className={inputClass} value={contribRoth} onChange={val => setContribRoth(val)} /></InputGroup>
+             <InputGroup label="To Roth Accounts (Cash reserves)"><CurrencyInput className={inputClass} value={contribCash} onChange={val => setContribCash(val)} /></InputGroup>
              
              <InputGroup label="Inv. Real Return (%)" icon={TrendingUp}><input type="number" step="0.1" className={inputClass} value={annualReturn} onChange={e => setAnnualReturn(Number(e.target.value))} /></InputGroup>
              <InputGroup label="Buffer Real Return (%)" icon={Shield}><input type="number" step="0.1" className={inputClass} value={cashReturn} onChange={e => setCashReturn(Number(e.target.value))} /></InputGroup>
@@ -754,7 +794,7 @@ export default function RetirementApp() {
           
           <div>
              <div className="flex justify-between items-end border-b pb-1 mb-3"><h3 className="text-sm font-semibold text-gray-800">Annual Budget</h3><span className="text-xs font-bold text-blue-600">{formatCurrency(totalBaseAnnualExpenses)}/yr</span></div>
-             <div className="space-y-3">{Object.keys(expenses).map(k => <div key={k} className="flex items-center space-x-2"><div className="w-1/2 text-xs text-gray-600 capitalize">{k}</div><input type="number" className={`${inputClass} w-1/2`} value={expenses[k]} onChange={e => handleExpenseChange(k, e.target.value)} /></div>)}</div>
+             <div className="space-y-3">{Object.keys(expenses).map(k => <div key={k} className="flex items-center space-x-2"><div className="w-1/2 text-xs text-gray-600 capitalize">{k}</div><CurrencyInput className={`${inputClass} w-1/2`} value={expenses[k]} onChange={val => handleExpenseChange(k, val)} /></div>)}</div>
           </div>
           <div className="pb-6">
              <div className="flex justify-between items-end border-b pb-2 mb-4">
@@ -797,7 +837,7 @@ export default function RetirementApp() {
                      </div>
                      <div>
                        <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wider mb-1">Amount /yr</label>
-                       <input type="number" className={`${inputClass} !py-1 !px-2 text-xs ${adj.amount < 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}`} value={adj.amount} onChange={e => updateAdjustment(adj.id, 'amount', Number(e.target.value))} />
+                       <CurrencyInput className={`${inputClass} !py-1 !px-2 text-xs ${adj.amount < 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}`} value={adj.amount} onChange={val => updateAdjustment(adj.id, 'amount', val)} />
                      </div>
                    </div>
                  </div>
@@ -810,8 +850,9 @@ export default function RetirementApp() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden bg-gray-50 min-w-0 w-full">
-        <div className="flex flex-col sm:flex-row flex-wrap sm:flex-nowrap items-start sm:items-center justify-between p-4 bg-white border-b border-gray-200 flex-shrink-0 gap-3">
+      {/* --- MAIN PANEL (Scrollable Page) --- */}
+      <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden bg-gray-50 min-w-0 w-full custom-scrollbar">
+        <div className="flex flex-col sm:flex-row flex-wrap sm:flex-nowrap items-start sm:items-center justify-between p-3 sm:p-4 bg-white border-b border-gray-200 flex-shrink-0 gap-2 sm:gap-3">
           <div className="flex items-center">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 mr-3 text-gray-600 bg-white rounded-md border border-gray-300 shadow-sm hover:bg-gray-50">
               <Menu className="w-5 h-5" />
@@ -823,8 +864,8 @@ export default function RetirementApp() {
           </div>
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <div className="flex bg-gray-100 p-1 rounded-lg border space-x-1 flex-1 sm:flex-none justify-center">
-              <button onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none justify-center px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 hover:bg-white hover:shadow-sm transition-colors flex items-center"><Upload className="w-4 h-4 mr-1.5" /> Load</button>
-              <button onClick={handleExportSettings} className="flex-1 sm:flex-none justify-center px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 hover:bg-white hover:shadow-sm transition-colors flex items-center"><Save className="w-4 h-4 mr-1.5" /> Save</button>
+              <button onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none justify-center px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 hover:bg-white hover:shadow-sm transition-colors flex items-center"><Upload className="w-4 h-4 mr-1.5 hidden sm:block" /> Load</button>
+              <button onClick={handleExportSettings} className="flex-1 sm:flex-none justify-center px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 hover:bg-white hover:shadow-sm transition-colors flex items-center"><Save className="w-4 h-4 mr-1.5 hidden sm:block" /> Save</button>
               <input type="file" accept=".json" ref={fileInputRef} onChange={handleImportSettings} className="hidden" />
             </div>
             <div className="flex bg-gray-100 p-1 rounded-lg border flex-1 sm:flex-none justify-center">
@@ -836,49 +877,66 @@ export default function RetirementApp() {
           </div>
         </div>
 
-        <div className="flex-shrink-0 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 p-4">
-          <div className="p-4 rounded-xl bg-white border shadow-sm flex flex-col justify-center"><div className="text-sm text-gray-500 font-semibold mb-1 truncate">Starting Net Worth</div><div className="text-2xl font-bold text-gray-800">{formatCurrency(startingTotalBalance)}</div></div>
+        {/* Dashboard Cards (Horizontal scroll on mobile to save vertical space) */}
+        <div className="flex-shrink-0 flex md:grid md:grid-cols-2 xl:grid-cols-4 overflow-x-auto gap-4 p-4 snap-x custom-scrollbar pb-4">
+          <div className="min-w-[80vw] sm:min-w-[240px] md:min-w-0 flex-shrink-0 snap-center p-4 rounded-xl bg-white border shadow-sm flex flex-col justify-center">
+             <div className="text-sm text-gray-500 font-semibold mb-1 truncate">Starting Net Worth</div>
+             <div className="text-2xl font-bold text-gray-800">{formatCurrency(startingTotalBalance)}</div>
+          </div>
           
-          {/* Dynamic Box based on Calculation Mode */}
           {calcMode === 'fixed' ? (
-            <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 shadow-sm flex flex-col justify-center">
+            <div className="min-w-[80vw] sm:min-w-[240px] md:min-w-0 flex-shrink-0 snap-center p-4 rounded-xl bg-blue-50 border border-blue-200 shadow-sm flex flex-col justify-center">
                <div className="text-sm text-blue-600 font-semibold mb-1 truncate">{advancedMode && numAdults === 2 ? 'P1 Earliest Safe Retire Age' : 'Earliest Safe Retire Age'}</div>
                <div className="text-2xl font-bold text-blue-900 truncate">{optimalRetAge !== null ? optimalRetAge : '--'} <span className="text-sm font-medium text-blue-700 opacity-80">years old</span></div>
             </div>
           ) : (
-            <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 shadow-sm flex flex-col justify-center">
+            <div className="min-w-[80vw] sm:min-w-[240px] md:min-w-0 flex-shrink-0 snap-center p-4 rounded-xl bg-indigo-50 border border-indigo-200 shadow-sm flex flex-col justify-center">
                <div className="text-sm text-indigo-600 font-semibold mb-1 truncate">{advancedMode && numAdults === 2 ? 'P1 Calculated FI Age' : 'Calculated FI Age'}</div>
                <div className="text-2xl font-bold text-indigo-900 truncate">{calculatedAgeBySWR !== null ? calculatedAgeBySWR : '--'} <span className="text-sm font-medium text-indigo-700 opacity-80">years old</span></div>
             </div>
           )}
 
-          <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 shadow-sm flex flex-col justify-center"><div className="text-sm text-purple-600 font-semibold mb-1 truncate">Net Worth at Retirement</div><div className="text-2xl font-bold text-purple-900 truncate">{formatCurrency(netWorthAtRetirement)}</div></div>
-          <div className={`p-4 rounded-xl border shadow-sm flex flex-col justify-center overflow-hidden ${endOfPlanBal > 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}><div className="text-sm text-gray-600 font-semibold mb-1 truncate">Ending Net Worth (Age {targetEndAge})</div><div className={`text-2xl font-bold truncate ${endOfPlanBal > 0 ? 'text-green-900' : 'text-red-900'}`}>{formatCurrency(endOfPlanBal)}</div></div>
+          <div className="min-w-[80vw] sm:min-w-[240px] md:min-w-0 flex-shrink-0 snap-center p-4 rounded-xl bg-purple-50 border border-purple-200 shadow-sm flex flex-col justify-center">
+             <div className="text-sm text-purple-600 font-semibold mb-1 truncate">Net Worth at Retirement</div>
+             <div className="text-2xl font-bold text-purple-900 truncate">{formatCurrency(netWorthAtRetirement)}</div>
+          </div>
+          
+          <div className={`min-w-[80vw] sm:min-w-[240px] md:min-w-0 flex-shrink-0 snap-center p-4 rounded-xl border shadow-sm flex flex-col justify-center overflow-hidden ${endOfPlanBal > 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+             <div className={`text-sm font-semibold mb-1 truncate ${endOfPlanBal > 0 ? 'text-green-600' : 'text-red-600'}`}>Ending Net Worth (Age {targetEndAge})</div>
+             <div className={`text-2xl font-bold truncate ${endOfPlanBal > 0 ? 'text-green-900' : 'text-red-900'}`}>{formatCurrency(endOfPlanBal)}</div>
+          </div>
         </div>
 
         {viewMode === 'chart' ? (
-          <div className="flex-1 p-4 sm:p-6 min-h-0 bg-white m-4 mt-0 border border-gray-300 rounded-lg shadow-sm">
+          <div className="flex-1 p-4 sm:p-6 min-h-[400px] bg-white mx-4 mb-4 border border-gray-300 rounded-lg shadow-sm">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={yearlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} /><XAxis dataKey="year" axisLine={false} tickLine={false} tick={{fontSize: 10}} dy={10} /><YAxis tickFormatter={(val) => `$${(val/1000000).toFixed(1)}M`} axisLine={false} tickLine={false} tick={{fontSize: 10}} dx={-10} /><Tooltip formatter={(value) => formatCurrency(value)} /><Legend verticalAlign="top" iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                <Area type="monotone" dataKey="endHome" stackId="1" stroke="#059669" fill="#34d399" fillOpacity={0.6} name="Home Equity" /><Area type="monotone" dataKey="endCash" stackId="1" stroke="#d97706" fill="#fbbf24" fillOpacity={0.6} name="Roth Cash Reserves" /><Area type="monotone" dataKey="endTrad" stackId="1" stroke="#4b5563" fill="#9ca3af" fillOpacity={0.6} name="Traditional 401k/IRA" /><Area type="monotone" dataKey="endRoth" stackId="1" stroke="#4f46e5" fill="#818cf8" fillOpacity={0.6} name="Roth IRA/401k (Invested)" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{fontSize: 10}} dy={10} />
+                <YAxis tickFormatter={(val) => `$${(val/1000000).toFixed(1)}M`} axisLine={false} tickLine={false} tick={{fontSize: 10}} dx={-10} />
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Legend verticalAlign="top" iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                <Area type="monotone" dataKey="endHome" stackId="1" stroke="#059669" fill="#34d399" fillOpacity={0.6} name="Home Equity" />
+                <Area type="monotone" dataKey="endCash" stackId="1" stroke="#d97706" fill="#fbbf24" fillOpacity={0.6} name="Roth Cash Reserves" />
+                <Area type="monotone" dataKey="endTrad" stackId="1" stroke="#4b5563" fill="#9ca3af" fillOpacity={0.6} name="Traditional 401k/IRA" />
+                <Area type="monotone" dataKey="endRoth" stackId="1" stroke="#4f46e5" fill="#818cf8" fillOpacity={0.6} name="Roth IRA/401k (Invested)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="flex-1 overflow-auto mx-4 mb-4 bg-white border border-gray-300 rounded-lg shadow-sm custom-scrollbar relative">
+          <div className="mx-4 mb-4 bg-white border border-gray-300 rounded-lg shadow-sm custom-scrollbar overflow-x-auto relative flex-1">
             <table className="w-full text-sm text-right border-collapse">
               <thead className="sticky top-0 bg-gray-100 shadow-sm z-10 border-b-2 border-gray-300">
                 <tr>
-                  <th className="px-3 sm:px-4 py-3 text-left font-bold border-r text-gray-700">Date</th>
-                  <th className="px-2 sm:px-4 py-3 text-center font-bold border-r text-gray-700">Phase</th>
-                  <th className="hidden lg:table-cell px-4 py-3 font-bold border-r text-gray-700">Beg. Net Worth</th>
-                  <th className="hidden md:table-cell px-4 py-3 font-bold border-r bg-blue-50/50 text-blue-800">Income (SS)</th>
-                  <th className="hidden sm:table-cell px-4 py-3 font-bold border-r bg-orange-50/50 text-orange-800">Expenses</th>
-                  <th className="hidden lg:table-cell px-4 py-3 font-bold border-r bg-red-50/50 text-red-800">Est. Taxes</th>
-                  <th className="hidden sm:table-cell px-4 py-3 font-bold border-r bg-indigo-50/50 text-indigo-800">Net Flow</th>
-                  <th className="hidden md:table-cell px-4 py-3 font-bold border-r bg-green-50/50 text-green-800">Inv. Growth</th>
-                  <th className="px-3 sm:px-4 py-3 font-bold text-gray-800">End Net Worth</th>
+                  <th className="px-3 sm:px-4 py-3 text-left font-bold border-r text-gray-700 whitespace-nowrap">Date</th>
+                  <th className="px-2 sm:px-4 py-3 text-center font-bold border-r text-gray-700 whitespace-nowrap">Phase</th>
+                  <th className="px-3 sm:px-4 py-3 font-bold border-r text-gray-700 whitespace-nowrap">Beg. Net Worth</th>
+                  <th className="px-3 sm:px-4 py-3 font-bold border-r bg-blue-50/50 text-blue-800 whitespace-nowrap">Income (SS)</th>
+                  <th className="px-3 sm:px-4 py-3 font-bold border-r bg-orange-50/50 text-orange-800 whitespace-nowrap">Expenses</th>
+                  <th className="px-3 sm:px-4 py-3 font-bold border-r bg-red-50/50 text-red-800 whitespace-nowrap">Est. Taxes</th>
+                  <th className="px-3 sm:px-4 py-3 font-bold border-r bg-indigo-50/50 text-indigo-800 whitespace-nowrap">Net Flow</th>
+                  <th className="px-3 sm:px-4 py-3 font-bold border-r bg-green-50/50 text-green-800 whitespace-nowrap">Inv. Growth</th>
+                  <th className="px-3 sm:px-4 py-3 font-bold text-gray-800 whitespace-nowrap">End Net Worth</th>
                 </tr>
               </thead>
               <tbody>
@@ -895,25 +953,25 @@ export default function RetirementApp() {
                           <div className="font-medium text-gray-600 mb-0.5 text-[10px] sm:text-xs">{row.ageStr}</div>
                           <span className={`inline-block px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-bold uppercase shadow-sm ${row.phaseText === 'Retired' ? 'bg-purple-100 text-purple-700' : row.phaseText === 'Transition' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{row.phaseText}</span>
                         </td>
-                        <td className="hidden lg:table-cell px-4 py-2 text-right border-r border-gray-200">{formatCurrency(row.startBal)}</td>
-                        <td className="hidden md:table-cell px-4 py-2 text-right border-r border-gray-200 bg-blue-50/20 text-blue-800">{formatCurrency(row.ssIncome)}</td>
-                        <td className={`hidden sm:table-cell px-4 py-2 text-right border-r border-gray-200 bg-orange-50/20 text-orange-900 ${row.isFlexed ? 'bg-blue-50/50 text-blue-800' : ''}`}>
+                        <td className="px-3 sm:px-4 py-2 text-right border-r border-gray-200 whitespace-nowrap">{formatCurrency(row.startBal)}</td>
+                        <td className="px-3 sm:px-4 py-2 text-right border-r border-gray-200 bg-blue-50/20 text-blue-800 whitespace-nowrap">{formatCurrency(row.ssIncome)}</td>
+                        <td className={`px-3 sm:px-4 py-2 text-right border-r border-gray-200 bg-orange-50/20 text-orange-900 whitespace-nowrap ${row.isFlexed ? 'bg-blue-50/50 text-blue-800' : ''}`}>
                           <div className="flex flex-col items-end">
                             <span>{formatCurrency(row.expenses)}</span>
                             {row.isFlexed && <span className="text-[9px] font-bold uppercase tracking-tight text-blue-700 mt-0.5">Flexed</span>}
                           </div>
                         </td>
-                        <td className="hidden lg:table-cell px-4 py-2 text-right border-r border-gray-200 bg-red-50/20 text-red-700 font-bold">{row.taxes > 0 ? `-${formatCurrency(row.taxes)}` : '$0'}</td>
-                        <td className={`hidden sm:table-cell px-4 py-2 text-right border-r border-gray-200 font-bold ${row.netFlow < 0 ? 'bg-red-50/20 text-red-700' : 'bg-indigo-50/20 text-indigo-700'}`}>{row.netFlow > 0 && '+'}{formatCurrency(row.netFlow)}</td>
-                        <td className={`hidden md:table-cell px-4 py-2 text-right border-r border-gray-200 ${row.growth >= 0 ? 'bg-green-50/20 text-green-700' : 'bg-red-50/20 text-red-700 font-bold'}`}>
+                        <td className="px-3 sm:px-4 py-2 text-right border-r border-gray-200 bg-red-50/20 text-red-700 font-bold whitespace-nowrap">{row.taxes > 0 ? `-${formatCurrency(row.taxes)}` : '$0'}</td>
+                        <td className={`px-3 sm:px-4 py-2 text-right border-r border-gray-200 font-bold whitespace-nowrap ${row.netFlow < 0 ? 'bg-red-50/20 text-red-700' : 'bg-indigo-50/20 text-indigo-700'}`}>{row.netFlow > 0 && '+'}{formatCurrency(row.netFlow)}</td>
+                        <td className={`px-3 sm:px-4 py-2 text-right border-r border-gray-200 whitespace-nowrap ${row.growth >= 0 ? 'bg-green-50/20 text-green-700' : 'bg-red-50/20 text-red-700 font-bold'}`}>
                           <div className="flex flex-col items-end">
                             <span>{formatCurrency(row.growth)}</span>
                             {row.crashTriggered && <span className="text-[9px] text-red-600 font-black uppercase italic mt-0.5">Crash!</span>}
                           </div>
                         </td>
-                        <td className={`px-3 sm:px-4 py-2 text-right tracking-tight border-l-2 border-gray-300 ${row.endBal < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                        <td className={`px-3 sm:px-4 py-2 text-right tracking-tight border-l-2 border-gray-300 whitespace-nowrap ${row.endBal < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                           <div className="font-bold text-sm sm:text-base">{formatCurrency(row.endBal)}</div>
-                          <div className="hidden sm:flex text-[9px] sm:text-[10px] text-gray-500 font-mono mt-0.5 justify-end space-x-1">
+                          <div className="flex text-[9px] sm:text-[10px] text-gray-500 font-mono mt-0.5 justify-end space-x-1">
                             <span title="Trad">{formatCurrency(row.endTrad)}</span>|<span title="Roth (Inv)" className="text-indigo-600">{formatCurrency(row.endRoth)}</span>|<span title="Roth (Cash)" className="text-amber-600">{formatCurrency(row.endCash)}</span>|<span title="Home" className="text-emerald-600">{formatCurrency(row.endHome)}</span>
                           </div>
                         </td>
@@ -921,7 +979,7 @@ export default function RetirementApp() {
                       {isExpanded && (
                         <tr className="bg-gray-100 border-b border-gray-300 shadow-inner">
                           <td colSpan="9" className="p-3 sm:p-4 md:px-6">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 w-full">
                               <div className="bg-white p-3 rounded-lg border flex flex-col"><h5 className="text-[10px] font-bold text-gray-500 uppercase mb-2 border-b pb-1">Traditional 401k/IRA</h5><div className="flex-1 space-y-1 mt-1"><MathRow label="Start Balance" val={row.tradFlow.start} /><MathRow label="Contributions" val={row.tradFlow.contrib} isPos /><MathRow label="Inv. Growth" val={row.tradFlow.growth} isPos={row.tradFlow.growth > 0} isNeg={row.tradFlow.growth < 0} /><MathRow label="Drawn (Expenses)" val={row.tradFlow.drawnExp} isNeg /><MathRow label="Drawn (Buffer Top-Up)" val={row.tradFlow.drawnBuf} isNeg /><MathRow label="Taxes (on Trad Draw)" val={row.tradFlow.tax} isNeg /></div><div className="border-t pt-2 mt-2 font-bold flex justify-between text-xs text-gray-800"><span>End</span><span>{formatCurrency(row.tradFlow.end)}</span></div></div>
                               <div className="bg-white p-3 rounded-lg border border-indigo-100 flex flex-col"><h5 className="text-[10px] font-bold text-indigo-500 uppercase mb-2 border-b pb-1">Roth IRA/401k (Invested)</h5><div className="flex-1 space-y-1 mt-1"><MathRow label="Start Balance" val={row.rothFlow.start} /><MathRow label="Contributions" val={row.rothFlow.contrib} isPos /><MathRow label="Inv. Growth" val={row.rothFlow.growth} isPos={row.rothFlow.growth > 0} isNeg={row.rothFlow.growth < 0} /><MathRow label="Drawn (Expenses)" val={row.rothFlow.drawnExp} isNeg /><MathRow label="Drawn (Buffer Top-Up)" val={row.rothFlow.drawnBuf} isNeg /><MathRow label="Surplus Saved" val={row.rothFlow.surplus} isPos /></div><div className="border-t pt-2 mt-2 font-bold flex justify-between text-xs text-indigo-900"><span>End</span><span>{formatCurrency(row.rothFlow.end)}</span></div></div>
                               <div className="bg-white p-3 rounded-lg border border-amber-100 flex flex-col"><h5 className="text-[10px] font-bold text-amber-600 uppercase mb-2 border-b pb-1">Roth Cash Reserves</h5><div className="flex-1 space-y-1 mt-1"><MathRow label="Start Balance" val={row.cashFlow.start} /><MathRow label="Contributions" val={row.cashFlow.contrib} isPos /><MathRow label="Yield/Interest" val={row.cashFlow.growth} isPos={row.cashFlow.growth > 0} isNeg={row.cashFlow.growth < 0} /><MathRow label="Drawn (Expenses)" val={row.cashFlow.drawnExp} isNeg /><MathRow label="Transfers In" val={row.cashFlow.transferIn} isPos /></div><div className="border-t pt-2 mt-2 font-bold flex justify-between text-xs text-amber-900"><span>End</span><span>{formatCurrency(row.cashFlow.end)}</span></div></div>
